@@ -1,0 +1,27 @@
+# Secrets
+.env
+*.pem
+*.key
+*.pfx
+id_rsa
+id_ed25519
+credentials.json
+gcp-oauth.keys.json
+*oauth*keys*
+*secret*
+
+# Large artifacts / downloads
+*.rar
+*.zip
+*.exe
+*.msi
+*.tar.gz
+C:/temp/
+
+# Cache
+.fastembed_cache/
+__pycache__/
+*.pyc
+
+# Claude internal
+.claude/
