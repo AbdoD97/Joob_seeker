@@ -15,6 +15,10 @@ D:\win_rev_claude\
 ├── agent_logs/
 │   ├── INDEX.md            # One-line log index
 │   └── current.md          # Current session log
+├── agents/
+│   ├── _template-agent/    # Reusable Python agent template
+│   └── linkedin-agent/     # LinkedIn job search script
+├── tmp/                    # Temp scripts for SCP to VPS (gitignored)
 ├── onboard.ps1             # VPS onboarding (OpenSSH, bore, SSH key)
 ├── download-twincat.ps1    # Download TwinCAT 3.1 from MediaFire
 ├── install-twincat.ps1     # Extract RAR + list contents

@@ -16,12 +16,17 @@ gcp-oauth.keys.json
 *.exe
 *.msi
 *.tar.gz
+*.pdf
 C:/temp/
+tmp/
 
 # Cache
 .fastembed_cache/
 __pycache__/
 *.pyc
+
+# Agent logs (runtime)
+agents/*/agent.log
 
 # Claude internal
 .claude/
