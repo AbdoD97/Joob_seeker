@@ -183,6 +183,9 @@
     </select>
   </div>
   <div class="filter-group">
+    <label><input type="checkbox" id="showApplied" checked> Show Applied</label>
+  </div>
+  <div class="filter-group">
     <label><input type="checkbox" id="showRejected"> Show Rejected</label>
   </div>
   <div class="filter-group">
@@ -403,6 +406,7 @@ function render() {
   const fitMin = +document.getElementById('fitFilter').value;
   const maxYears = document.getElementById('yearsFilter').value;
   const speed = document.getElementById('speedFilter').value;
+  const showApplied = document.getElementById('showApplied').checked;
   const showRej = document.getElementById('showRejected').checked;
   const showSaved = document.getElementById('showSaved').checked;
   const showFlagged = document.getElementById('showFlagged').checked;
@@ -417,6 +421,7 @@ function render() {
     const maxApplicants = document.getElementById('applicantsFilter').value;
     if (maxApplicants && j.applicant_count != null && j.applicant_count > +maxApplicants) return false;
     if (speed && j.interview_speed !== speed) return false;
+    if (j.status === 'applied' && !showApplied) return false;
     const isRej = !!rejections[j.id];
     if (isRej && !showRej) return false;
     if (j.status === 'saved' && !showSaved) return false;
@@ -717,6 +722,7 @@ document.getElementById('fitFilter').addEventListener('input', function() {
 document.getElementById('yearsFilter').addEventListener('change', render);
 document.getElementById('applicantsFilter').addEventListener('change', render);
 document.getElementById('speedFilter').addEventListener('change', render);
+document.getElementById('showApplied').addEventListener('change', render);
 document.getElementById('showRejected').addEventListener('change', render);
 document.getElementById('showSaved').addEventListener('change', render);
 document.getElementById('showFlagged').addEventListener('change', render);
