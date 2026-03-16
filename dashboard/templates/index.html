@@ -165,6 +165,16 @@
     </select>
   </div>
   <div class="filter-group">
+    Max applicants:
+    <select id="applicantsFilter">
+      <option value="">Any</option>
+      <option value="25">25</option>
+      <option value="50">50</option>
+      <option value="100">100</option>
+      <option value="200">200</option>
+    </select>
+  </div>
+  <div class="filter-group">
     Speed:
     <select id="speedFilter">
       <option value="">All</option>
@@ -404,6 +414,8 @@ function render() {
       const yrs = parseFloat(j.years_required) || 0;
       if (yrs > +maxYears) return false;
     }
+    const maxApplicants = document.getElementById('applicantsFilter').value;
+    if (maxApplicants && j.applicant_count != null && j.applicant_count > +maxApplicants) return false;
     if (speed && j.interview_speed !== speed) return false;
     const isRej = !!rejections[j.id];
     if (isRej && !showRej) return false;
@@ -693,6 +705,7 @@ document.getElementById('fitFilter').addEventListener('input', function() {
   render();
 });
 document.getElementById('yearsFilter').addEventListener('change', render);
+document.getElementById('applicantsFilter').addEventListener('change', render);
 document.getElementById('speedFilter').addEventListener('change', render);
 document.getElementById('showRejected').addEventListener('change', render);
 document.getElementById('showSaved').addEventListener('change', render);
