@@ -2,13 +2,15 @@ $tracker = "C:\agents\omda\data\jobs\tracker.json"
 $maxPerRound = 30
 $maxTotal = 100
 $maxIterations = 8
+$maxLoopMinutes = 30
 $agentDir = "C:\agents\omda"
 $logFile = "C:\agents\omda\data\jobs\search-log.txt"
 
+$loopStart = Get-Date
 $startData = Get-Content $tracker -Raw | ConvertFrom-Json
 $startCount = $startData.jobs.Count
 
-"[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Search loop starting (tracker has $startCount jobs, finding up to $maxPerRound more)" | Out-File $logFile -Encoding UTF8
+"[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Search loop starting (tracker has $startCount jobs, finding up to $maxPerRound more, max ${maxLoopMinutes}min)" | Out-File $logFile -Encoding UTF8
 
 if ($startCount -ge $maxTotal) {
     "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Total cap reached: $startCount/$maxTotal jobs. Stopping." | Out-File $logFile -Append -Encoding UTF8
@@ -16,6 +18,13 @@ if ($startCount -ge $maxTotal) {
 }
 
 for ($i = 1; $i -le $maxIterations; $i++) {
+    # 30-minute hard timeout for entire loop
+    $elapsed = (Get-Date) - $loopStart
+    if ($elapsed.TotalMinutes -ge $maxLoopMinutes) {
+        "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] 30-min timeout reached after $($elapsed.TotalMinutes.ToString('F1'))min. Stopping." | Out-File $logFile -Append -Encoding UTF8
+        break
+    }
+
     $data = Get-Content $tracker -Raw | ConvertFrom-Json
     $count = $data.jobs.Count
     $addedThisRound = $count - $startCount
@@ -39,9 +48,30 @@ for ($i = 1; $i -le $maxIterations; $i++) {
 
     "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Iteration $i starting ($count jobs so far, finding $remaining more)" | Out-File $logFile -Append -Encoding UTF8
 
+    # Per-iteration timeout: remaining loop time minus 1min buffer for cleanup
+    $remainingMinutes = $maxLoopMinutes - $elapsed.TotalMinutes - 1
+    if ($remainingMinutes -lt 2) {
+        "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Not enough time for iteration $i (<2min left). Stopping." | Out-File $logFile -Append -Encoding UTF8
+        break
+    }
+    $iterTimeout = [Math]::Floor($remainingMinutes) * 60
+
     Push-Location $agentDir
     try {
-        & claude -p $prompt --dangerously-skip-permissions 2>&1 | Out-Null
+        $job = Start-Job -ScriptBlock {
+            param($dir, $p)
+            Set-Location $dir
+            & claude -p $p --dangerously-skip-permissions 2>&1
+        } -ArgumentList $agentDir, $prompt
+
+        $completed = Wait-Job $job -Timeout $iterTimeout
+        if ($completed) {
+            Receive-Job $job | Out-Null
+        } else {
+            Stop-Job $job
+            "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Iteration $i timed out after ${iterTimeout}s. Killing." | Out-File $logFile -Append -Encoding UTF8
+        }
+        Remove-Job $job -Force -ErrorAction SilentlyContinue
     } catch {
         "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Error in iteration $i : $_" | Out-File $logFile -Append -Encoding UTF8
     }
@@ -54,15 +84,16 @@ for ($i = 1; $i -le $maxIterations; $i++) {
     if (($newCount - $startCount) -ge $maxPerRound) { break }
     if ($newCount -ge $maxTotal) { break }
     if ($newCount -eq $count) {
-        "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] No new jobs found in iteration $i. Stopping." | Out-File $logFile -Append -Encoding UTF8
+        "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] No new jobs found in iteration $i. Possible LinkedIn soft ban or no matches. Stopping." | Out-File $logFile -Append -Encoding UTF8
         break
     }
 }
 
 $finalData = Get-Content $tracker -Raw | ConvertFrom-Json
 $finalCount = $finalData.jobs.Count
-"[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Search loop complete: $finalCount total jobs" | Out-File $logFile -Append -Encoding UTF8
+$totalElapsed = ((Get-Date) - $loopStart).TotalMinutes.ToString('F1')
+"[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Search loop complete: $finalCount total jobs (+$($finalCount - $startCount) new) in ${totalElapsed}min" | Out-File $logFile -Append -Encoding UTF8
 
 Push-Location $agentDir
-& claude -p "Send Telegram notification: Job search complete. Found $finalCount jobs. Check dashboard." --dangerously-skip-permissions 2>&1 | Out-Null
+& claude -p "Send Telegram notification: Job search complete. Found $finalCount jobs (+$($finalCount - $startCount) new) in ${totalElapsed}min. Check dashboard." --dangerously-skip-permissions 2>&1 | Out-Null
 Pop-Location

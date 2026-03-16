@@ -144,6 +144,8 @@ Overall average: **60-90% token reduction** on common development operations.
 ## Guardrails
 - When constructing commands that cross shell boundaries (bash -> PowerShell, SSH -> cmd), ALWAYS write to a .ps1 file and execute via file path — never build inline quoted strings. Nested quote layers (single/double/escaped) across bash+SSH+PowerShell reliably break.
 - NEVER dispatch a new omda job search task if one is already running or queued. Always check `manage.ps1 status omda` first — if any task shows `running` or `queued`, refuse and inform the user. Stop the existing task first if a new one is needed.
+- Always display dates and times in Amsterdam timezone (Europe/Amsterdam, CET/CEST). When showing timestamps from VPS or other sources, convert to Amsterdam time.
+- Never let any search task exceed 30 minutes. If a search is still running after 30 min, kill it automatically. Apply this in search-loop.ps1 execution time limits and scheduled task settings.
 
 ## Agent Factory
 - When creating agents, save the configuration as a reusable template in the create-agent skill.
