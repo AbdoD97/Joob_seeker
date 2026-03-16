@@ -273,9 +273,11 @@ const server = http.createServer((req, res) => {
           try { fs.writeFileSync(f, startScript, { encoding: 'utf8' }); } catch {}
           exec('powershell -ExecutionPolicy Bypass -File "' + f + '"',
             { timeout: 20000 },
-            (err, stdout) => {
+            (err, stdout, stderr) => {
               try { fs.unlinkSync(f); } catch {}
-              send(res, 200, { ok: !err && (stdout || '').includes('started') });
+              const output = (stdout || '').trim();
+              const error = (stderr || '').trim();
+              send(res, 200, { ok: output.includes('started'), output, error: error || undefined });
             }
           );
         });
