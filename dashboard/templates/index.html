@@ -49,7 +49,28 @@
   .rules-bar.visible { display: flex; align-items: center; gap: 10px; }
   .rules-bar strong { color: #a78bfa; }
 
+  .tabs { display: flex; gap: 0; background: #161b22; border-bottom: 1px solid #30363d; padding: 0 24px; }
+  .tab { padding: 10px 24px; font-size: 14px; color: #8b949e; cursor: pointer; border-bottom: 2px solid transparent; font-weight: 500; transition: color 0.15s; }
+  .tab:hover { color: #c9d1d9; }
+  .tab.active { color: #f0f6fc; border-bottom-color: #58a6ff; }
+  .tab .tab-count { font-size: 12px; color: #484f58; margin-left: 6px; }
+  .tab.active .tab-count { color: #8b949e; }
+
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(460px, 1fr)); gap: 16px; padding: 20px 24px; }
+
+  .skipped-view { padding: 20px 24px; display: none; }
+  .skipped-view.active { display: block; }
+  .skipped-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .skipped-table th { text-align: left; padding: 10px 12px; color: #8b949e; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid #30363d; background: #161b22; position: sticky; top: 0; }
+  .skipped-table td { padding: 10px 12px; border-bottom: 1px solid #21262d; color: #c9d1d9; vertical-align: top; }
+  .skipped-table tr:hover td { background: #161b2288; }
+  .skipped-reason { color: #d29922; font-size: 12px; }
+  .skipped-date { color: #484f58; font-size: 12px; }
+  .skipped-empty { text-align: center; color: #8b949e; padding: 80px 24px; font-size: 15px; }
+  .skipped-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .skipped-header h2 { font-size: 16px; font-weight: 600; color: #f0f6fc; }
+  .skipped-clear-btn { background: #21262d; border: 1px solid #30363d; color: #8b949e; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .skipped-clear-btn:hover { background: #30363d; }
 
   .card { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 18px; transition: border-color 0.15s; }
   .card:hover { border-color: #58a6ff44; }
@@ -200,7 +221,21 @@
   </div>
 </div>
 
+<div class="tabs">
+  <div class="tab active" id="tabJobs" onclick="switchTab('jobs')">Jobs <span class="tab-count" id="tabJobsCount"></span></div>
+  <div class="tab" id="tabSkipped" onclick="switchTab('skipped')">Skipped <span class="tab-count" id="tabSkippedCount"></span></div>
+</div>
+
 <div class="grid" id="grid"></div>
+
+<div class="skipped-view" id="skippedView">
+  <div class="skipped-header">
+    <h2>Skipped by Agent</h2>
+    <button class="skipped-clear-btn" onclick="clearSkipped()">Clear Skipped</button>
+  </div>
+  <div id="skippedContent"></div>
+</div>
+
 <div id="status-bar"></div>
 
 <!-- Analysis overlay -->
@@ -230,6 +265,7 @@
 
 <script>
 let allJobs = [];
+let skippedJobs = [];
 let rejections = {};
 let sortMode = 'fit';
 let activeRules = null;
@@ -238,6 +274,7 @@ let lastJobCount = 0;
 let lastUpdated = '';
 let agentStatus = 'unknown';
 let jobStream = null;
+let activeTab = 'jobs';
 
 const STATUS_LABELS = { idle: 'Agent idle', searching: 'Searching...', queued: 'Queued', failed: 'Search failed', unknown: 'Unknown' };
 const SEARCH_BTN_TITLES = {
@@ -309,6 +346,7 @@ function handleJobUpdate(data) {
     document.getElementById('meta').textContent =
       'Round ' + round + ' - ' + jobs.length + ' jobs' + appliedText + ' - Updated ' + updated;
     render();
+    updateTabCounts();
     if (added > 0) showStatus('+' + added + ' new job' + (added > 1 ? 's' : '') + ' found');
   }
 }
@@ -319,6 +357,13 @@ function startJobStream() {
   jobStream.onmessage = function(e) {
     try { handleJobUpdate(JSON.parse(e.data)); } catch {}
   };
+  jobStream.addEventListener('skipped', function(e) {
+    try {
+      skippedJobs = JSON.parse(e.data) || [];
+      updateTabCounts();
+      if (activeTab === 'skipped') renderSkipped();
+    } catch {}
+  });
   jobStream.onerror = function() {
     // SSE dropped — reconnect after 5s (browser does this automatically but we reset state)
     jobStream.close();
@@ -339,13 +384,67 @@ function startPolling() {
   document.getElementById('liveDot').classList.add('active');
   startJobStream();
   // Poll jobs as backup (SSE may miss changes), plus agent status
-  pollTimer = setInterval(() => { pollJobs(); pollAgentStatus(); }, 10000);
+  pollTimer = setInterval(() => { pollJobs(); pollAgentStatus(); loadSkipped(); }, 10000);
 }
 
 function stopPolling() {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   if (jobStream) { jobStream.close(); jobStream = null; }
   document.getElementById('liveDot').classList.remove('active');
+}
+
+function switchTab(tab) {
+  activeTab = tab;
+  document.getElementById('tabJobs').classList.toggle('active', tab === 'jobs');
+  document.getElementById('tabSkipped').classList.toggle('active', tab === 'skipped');
+  document.getElementById('grid').style.display = tab === 'jobs' ? '' : 'none';
+  document.querySelector('.filters').style.display = tab === 'jobs' ? '' : 'none';
+  document.getElementById('skippedView').classList.toggle('active', tab === 'skipped');
+  if (tab === 'skipped') renderSkipped();
+}
+
+function updateTabCounts() {
+  const jc = document.getElementById('tabJobsCount');
+  const sc = document.getElementById('tabSkippedCount');
+  jc.textContent = allJobs.length ? '(' + allJobs.length + ')' : '';
+  sc.textContent = skippedJobs.length ? '(' + skippedJobs.length + ')' : '';
+}
+
+function renderSkipped() {
+  const el = document.getElementById('skippedContent');
+  if (!skippedJobs.length) {
+    el.innerHTML = '<div class="skipped-empty">No skipped jobs yet. The agent will log jobs it considered but passed on here.</div>';
+    return;
+  }
+  const rows = skippedJobs.map(s => {
+    const url = s.url ? '<a href="' + escHtml(s.url) + '" target="_blank" style="color:#58a6ff;text-decoration:none">View</a>' : '';
+    return '<tr>' +
+      '<td>' + escHtml(s.company || 'Unknown') + '</td>' +
+      '<td>' + escHtml(s.title || 'Unknown') + '</td>' +
+      '<td>' + escHtml(s.location || '-') + '</td>' +
+      '<td class="skipped-reason">' + escHtml(s.reason || '-') + '</td>' +
+      '<td>' + url + '</td>' +
+      '<td class="skipped-date">' + escHtml(s.date || '') + '</td>' +
+    '</tr>';
+  }).join('');
+  el.innerHTML = '<table class="skipped-table"><thead><tr>' +
+    '<th>Company</th><th>Title</th><th>Location</th><th>Skip Reason</th><th>Link</th><th>Date</th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table>';
+}
+
+async function loadSkipped() {
+  try {
+    skippedJobs = await fetch('/api/skipped').then(r => r.json()) || [];
+  } catch { skippedJobs = []; }
+  updateTabCounts();
+  if (activeTab === 'skipped') renderSkipped();
+}
+
+async function clearSkipped() {
+  if (!confirm('Clear all skipped jobs? This cannot be undone.')) return;
+  const r = await fetch('/api/clear-skipped', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' }).then(r => r.json());
+  if (r.ok) { skippedJobs = []; updateTabCounts(); renderSkipped(); showStatus('Skipped list cleared'); }
+  else showStatus('Failed to clear skipped');
 }
 
 async function loadData() {
@@ -385,6 +484,7 @@ async function loadData() {
   }
 
   render();
+  loadSkipped();
   hideStatus();
 }
 

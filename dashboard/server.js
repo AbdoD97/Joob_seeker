@@ -9,6 +9,7 @@ const TRACKER = 'C:/agents/omda/data/jobs/tracker.json';
 const REJECTIONS = 'C:/agents/omda/data/jobs/rejections.json';
 const REJECTION_RULES_JSON = 'C:/agents/omda/data/jobs/rejection_rules.json';
 const REJECTION_RULES_MD = 'C:/agents/omda/data/jobs/rejection_rules.md';
+const SKIPPED = 'C:/agents/omda/data/jobs/skipped.json';
 const HTML = path.join(__dirname, 'index.html');
 const MANAGE = 'C:\\agents\\manage.ps1';
 const STOP_SCRIPT = [
@@ -134,9 +135,10 @@ function analyzeRejections(rejections, callback) {
   );
 }
 
-// SSE: watch tracker.json for changes and push to connected clients
+// SSE: watch tracker.json and skipped.json for changes and push to connected clients
 const sseClients = new Set();
 let lastTrackerMtime = 0;
+let lastSkippedMtime = 0;
 let trackerWatcher = null;
 
 function broadcastJobs() {
@@ -157,17 +159,32 @@ function broadcastJobs() {
   }
 }
 
+function broadcastSkipped() {
+  let mtime;
+  try { mtime = fs.statSync(SKIPPED).mtimeMs; } catch { return; }
+  if (mtime === lastSkippedMtime) return;
+  lastSkippedMtime = mtime;
+  const data = readJSON(SKIPPED);
+  if (!data) return;
+  const msg = 'event: skipped\ndata: ' + JSON.stringify(data) + '\n\n';
+  for (const client of sseClients) {
+    try { client.write(msg); } catch { sseClients.delete(client); }
+  }
+}
+
 function startTrackerWatch() {
   if (trackerWatcher) return;
   const dir = path.dirname(TRACKER);
-  const file = path.basename(TRACKER);
+  const trackerFile = path.basename(TRACKER);
+  const skippedFile = path.basename(SKIPPED);
   try {
     trackerWatcher = fs.watch(dir, (event, filename) => {
-      if (filename === file) broadcastJobs();
+      if (filename === trackerFile) broadcastJobs();
+      if (filename === skippedFile) broadcastSkipped();
     });
   } catch {}
   // Fallback poll every 2s in case fs.watch misses events on Windows
-  setInterval(broadcastJobs, 2000);
+  setInterval(() => { broadcastJobs(); broadcastSkipped(); }, 2000);
 }
 startTrackerWatch();
 
@@ -212,6 +229,11 @@ const server = http.createServer((req, res) => {
       if (!('fit_score' in j) && 'fit' in j) j.fit_score = j.fit;
     }
     send(res, 200, data);
+    return;
+  }
+
+  if (req.method === 'GET' && pathname === '/api/skipped') {
+    send(res, 200, readJSON(SKIPPED) || []);
     return;
   }
 
@@ -316,6 +338,9 @@ const server = http.createServer((req, res) => {
       } else if (pathname === '/api/clear-tracker') {
         const empty = { round: 0, last_updated: '', jobs: [] };
         send(res, 200, { ok: writeJSON(TRACKER, empty) });
+
+      } else if (pathname === '/api/clear-skipped') {
+        send(res, 200, { ok: writeJSON(SKIPPED, []) });
 
       } else if (pathname === '/api/clear-rules') {
         let ok = true;

@@ -32,7 +32,10 @@ for ($i = 1; $i -le $maxIterations; $i++) {
     $prompt = "You are in search iteration $i. tracker.json currently has $count jobs. " +
               "Search LinkedIn for $remaining MORE new jobs matching criteria in your CLAUDE.md. " +
               "Read tracker.json first, append new jobs (keep existing ones), save tracker.json. " +
-              "Do NOT search for more than $remaining jobs. Do NOT overwrite existing jobs."
+              "Do NOT search for more than $remaining jobs. Do NOT overwrite existing jobs. " +
+              "IMPORTANT: For any job posting you look at but decide NOT to add (wrong fit, wrong criteria, " +
+              "duplicate, etc.), append it to C:\agents\omda\data\jobs\skipped.json with format: " +
+              "{company, title, url, location, reason, date}. Read skipped.json first, keep existing entries, append new ones."
 
     "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Iteration $i starting ($count jobs so far, finding $remaining more)" | Out-File $logFile -Append -Encoding UTF8
 
