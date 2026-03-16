@@ -258,26 +258,12 @@ const server = http.createServer((req, res) => {
           if (s.status === 'searching' || s.status === 'queued') {
             send(res, 200, { ok: false, reason: 'Already running' }); return;
           }
-          // Register and run search-loop as a scheduled task under Administrator
-          const startScript = [
-            '$taskName = "' + SEARCH_TASK + '"',
-            'Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue',
-            '$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File ' + SEARCH_LOOP + '"',
-            '$principal = New-ScheduledTaskPrincipal -UserId "Administrator" -LogonType S4U -RunLevel Highest',
-            '$settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 45) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries',
-            'Register-ScheduledTask -TaskName $taskName -Action $action -Principal $principal -Settings $settings | Out-Null',
-            'Start-ScheduledTask -TaskName $taskName',
-            'Write-Host "started"'
-          ].join('\n');
-          const f = 'C:\\temp\\start-search-' + Date.now() + '.ps1';
-          try { fs.writeFileSync(f, startScript, { encoding: 'utf8' }); } catch {}
-          exec('powershell -ExecutionPolicy Bypass -File "' + f + '"',
+          // Use pre-deployed start script
+          exec('powershell -ExecutionPolicy Bypass -File "C:\\temp\\start-search-loop.ps1"',
             { timeout: 20000 },
             (err, stdout, stderr) => {
-              try { fs.unlinkSync(f); } catch {}
               const output = (stdout || '').trim();
-              const error = (stderr || '').trim();
-              send(res, 200, { ok: output.includes('started'), output, error: error || undefined });
+              send(res, 200, { ok: output.includes('started'), output, error: (stderr || '').trim() || undefined });
             }
           );
         });
