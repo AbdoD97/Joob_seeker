@@ -53,16 +53,32 @@ function getAgentStatus(callback) {
       (err, stdout) => {
         const state = (stdout || '').trim();
         if (state === 'Running') status = 'searching';
-        let log = '';
-        try { const lines = fs.readFileSync(SEARCH_LOG, 'utf8').trim().split('\n'); log = lines[lines.length - 1] || ''; } catch {}
-        callback({ status, log });
+        const info = parseSearchLog();
+        callback({ status, ...info });
       }
     );
   } else {
-    let log = '';
-    try { const lines = fs.readFileSync(SEARCH_LOG, 'utf8').trim().split('\n'); log = lines[lines.length - 1] || ''; } catch {}
-    callback({ status, log });
+    const info = parseSearchLog();
+    callback({ status, ...info });
   }
+}
+
+function parseSearchLog() {
+  let log = '', iteration = null, maxIterations = 8, phase = '';
+  try {
+    const lines = fs.readFileSync(SEARCH_LOG, 'utf8').trim().split('\n');
+    log = lines[lines.length - 1] || '';
+    // Scan all lines for iteration info (last match wins)
+    for (const line of lines) {
+      const m = line.match(/Iteration (\d+)/);
+      if (m) iteration = parseInt(m[1]);
+      if (/starting/i.test(line) && m) phase = 'searching';
+      if (/done/i.test(line) && m) phase = 'done';
+      if (/cap reached|Stopping|No new jobs|complete/i.test(line)) phase = 'finishing';
+    }
+  } catch {}
+  const pct = iteration ? Math.round((iteration / maxIterations) * 100) : 0;
+  return { log, iteration, maxIterations, phase, progress: pct };
 }
 
 function readJSON(file) {

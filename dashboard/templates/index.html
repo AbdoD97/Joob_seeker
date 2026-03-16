@@ -19,7 +19,12 @@
   .live-dot { width: 8px; height: 8px; border-radius: 50%; background: #3fb950; display: none; animation: pulse 1.5s infinite; }
   .live-dot.active { display: inline-block; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
-  .agent-status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #8b949e; }
+  .agent-status { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #8b949e; }
+  .iter-progress { display: none; align-items: center; gap: 6px; }
+  .iter-progress.active { display: flex; }
+  .iter-bar { width: 80px; height: 6px; background: #21262d; border-radius: 3px; overflow: hidden; }
+  .iter-fill { height: 100%; background: #3fb950; border-radius: 3px; transition: width 0.5s ease; }
+  .iter-label { font-size: 11px; color: #8b949e; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
   .status-dot.idle { background: #484f58; }
   .status-dot.searching { background: #3fb950; animation: pulse 1.5s infinite; }
@@ -156,6 +161,10 @@
     <div class="agent-status">
       <span class="status-dot idle" id="agentDot"></span>
       <span id="agentLabel">Checking...</span>
+      <div class="iter-progress" id="iterProgress">
+        <div class="iter-bar"><div class="iter-fill" id="iterFill" style="width:0%"></div></div>
+        <span class="iter-label" id="iterLabel"></span>
+      </div>
     </div>
     <button class="search-btn start" id="searchBtn" onclick="toggleSearch()" title="Start a new job search round" disabled>Start Search</button>
     <button class="analyze-btn" id="analyzeBtn" onclick="openAnalysis()">Analyze Rejections</button>
@@ -290,8 +299,13 @@ function updateAgentUI(s) {
   const dot = document.getElementById('agentDot');
   const label = document.getElementById('agentLabel');
   const btn = document.getElementById('searchBtn');
+  const iterProgress = document.getElementById('iterProgress');
+  const iterFill = document.getElementById('iterFill');
+  const iterLabel = document.getElementById('iterLabel');
+
   dot.className = 'status-dot ' + s.status;
   label.textContent = STATUS_LABELS[s.status] || s.status;
+
   if (s.status === 'searching' || s.status === 'queued') {
     btn.textContent = 'Stop Search';
     btn.className = 'search-btn stop';
@@ -302,9 +316,30 @@ function updateAgentUI(s) {
     btn.title = SEARCH_BTN_TITLES[s.status] || SEARCH_BTN_TITLES.idle;
   }
   btn.disabled = (s.status === 'unknown');
-  // Show search progress from log
-  if (s.log && s.status === 'searching') {
-    label.textContent = s.log.replace(/^\[.*?\]\s*/, '');
+
+  // Show iteration progress
+  if (s.status === 'searching' && s.iteration != null) {
+    const pct = s.progress || 0;
+    iterProgress.classList.add('active');
+    iterFill.style.width = pct + '%';
+    iterLabel.textContent = s.iteration + '/' + (s.maxIterations || 8) + ' (' + pct + '%)';
+    // Show phase-aware status text
+    if (s.phase === 'searching') {
+      label.textContent = 'Iteration ' + s.iteration + ' searching...';
+    } else if (s.phase === 'done') {
+      label.textContent = 'Iteration ' + s.iteration + ' done';
+    } else if (s.phase === 'finishing') {
+      label.textContent = 'Finishing up...';
+      iterFill.style.width = '100%';
+      iterLabel.textContent = 'done';
+    } else if (s.log) {
+      label.textContent = s.log.replace(/^\[.*?\]\s*/, '');
+    }
+  } else {
+    iterProgress.classList.remove('active');
+    if (s.log && s.status === 'searching') {
+      label.textContent = s.log.replace(/^\[.*?\]\s*/, '');
+    }
   }
 }
 
@@ -384,7 +419,8 @@ function startPolling() {
   document.getElementById('liveDot').classList.add('active');
   startJobStream();
   // Poll jobs as backup (SSE may miss changes), plus agent status
-  pollTimer = setInterval(() => { pollJobs(); pollAgentStatus(); loadSkipped(); }, 10000);
+  // Poll agent status more frequently (5s) so iteration progress feels responsive
+  pollTimer = setInterval(() => { pollJobs(); pollAgentStatus(); loadSkipped(); }, 5000);
 }
 
 function stopPolling() {
