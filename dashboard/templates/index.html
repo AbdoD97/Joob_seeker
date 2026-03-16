@@ -54,6 +54,7 @@
   .card { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 18px; transition: border-color 0.15s; }
   .card:hover { border-color: #58a6ff44; }
   .card.saved { border-color: #3fb95044; }
+  .card.applied { border-color: #58a6ff44; }
   .card.rejected { opacity: 0.45; border-color: #30363d; }
   .card.rule-flagged { border-color: #6e40c944; background: #1a1020; }
 
@@ -64,6 +65,7 @@
   .badge-fast { background: #1a4a1a; color: #3fb950; }
   .badge-normal { background: #1a2a4a; color: #58a6ff; }
   .badge-saved { background: #1a4a1a; color: #3fb950; }
+  .badge-applied { background: #1a3a5c; color: #58a6ff; }
   .badge-rejected { background: #4a1a1a; color: #f85149; }
   .badge-flagged { background: #2a1a4a; color: #a78bfa; }
 
@@ -285,8 +287,10 @@ function handleJobUpdate(data) {
     lastUpdated = updated;
     allJobs = jobs;
     const round = data.round || '?';
+    const appliedCount = jobs.filter(j => j.status === 'applied').length;
+    const appliedText = appliedCount > 0 ? ' - ' + appliedCount + ' applied' : '';
     document.getElementById('meta').textContent =
-      'Round ' + round + ' - ' + jobs.length + ' jobs - Updated ' + updated;
+      'Round ' + round + ' - ' + jobs.length + ' jobs' + appliedText + ' - Updated ' + updated;
     render();
     if (added > 0) showStatus('+' + added + ' new job' + (added > 1 ? 's' : '') + ' found');
   }
@@ -342,8 +346,10 @@ async function loadData() {
   activeRules = rulesRes || null;
 
   const round = jobsRes.round || '?';
+  const appliedCount = allJobs.filter(j => j.status === 'applied').length;
+  const appliedText = appliedCount > 0 ? ' - ' + appliedCount + ' applied' : '';
   document.getElementById('meta').textContent =
-    'Round ' + round + ' - ' + allJobs.length + ' jobs - Updated ' + lastUpdated;
+    'Round ' + round + ' - ' + allJobs.length + ' jobs' + appliedText + ' - Updated ' + lastUpdated;
   startPolling();
   pollAgentStatus();
 
@@ -425,6 +431,7 @@ function cardHTML(j) {
   const fit = j.fit_score ?? j.fit ?? 0;
   const rej = rejections[j.id];
   const isSaved = j.status === 'saved';
+  const isApplied = j.status === 'applied';
   const isRej = !!rej;
   const flaggedKws = !isRej ? getFlaggedInfo(j) : null;
   const isFlagged = !!flaggedKws;
@@ -433,7 +440,8 @@ function cardHTML(j) {
   const speedBadge = j.interview_speed === 'fast'
     ? '<span class="badge badge-fast">Fast</span>'
     : '<span class="badge badge-normal">Normal</span>';
-  const statusBadge = isSaved ? '<span class="badge badge-saved">Saved</span>'
+  const statusBadge = isApplied ? '<span class="badge badge-applied">Applied</span>'
+    : isSaved ? '<span class="badge badge-saved">Saved</span>'
     : isRej ? '<span class="badge badge-rejected">Rejected</span>'
     : isFlagged ? '<span class="badge badge-flagged">Rule Match</span>' : '';
 
@@ -446,7 +454,7 @@ function cardHTML(j) {
   const deadline = j.deadline && j.deadline !== 'unknown' ? j.deadline : '';
   const applicants = j.applicant_count != null ? j.applicant_count + ' applicants' : '';
 
-  const cardClass = 'card' + (isSaved ? ' saved' : '') + (isRej ? ' rejected' : '') + (isFlagged && !isRej ? ' rule-flagged' : '');
+  const cardClass = 'card' + (isApplied ? ' applied' : '') + (isSaved ? ' saved' : '') + (isRej ? ' rejected' : '') + (isFlagged && !isRej ? ' rule-flagged' : '');
 
   return '<div class="' + cardClass + '" id="card-' + j.id + '">' +
     '<div class="card-top">' +
@@ -468,7 +476,7 @@ function cardHTML(j) {
     (j.key_match ? '<div class="key-match">' + escHtml(j.key_match) + '</div>' : '') +
     rejHtml + flagHtml +
     '<div class="actions">' +
-      '<button class="btn btn-apply" onclick="applyJob(\'' + escAttr(j.url) + '\')">Apply</button>' +
+      '<button class="btn btn-apply" ' + (isApplied ? 'disabled' : '') + ' onclick="applyJob(' + j.id + ', \'' + escAttr(j.url) + '\', this)">' + (isApplied ? 'Applied' : 'Apply') + '</button>' +
       '<button class="btn btn-save" ' + (isSaved ? 'disabled' : '') + ' onclick="saveJob(' + j.id + ', this)">' + (isSaved ? 'Saved' : 'Save') + '</button>' +
       (isRej
         ? '<button class="btn btn-unreject" onclick="unrejectJob(' + j.id + ', \'' + escAttr(j.company) + '\', \'' + escAttr(j.title) + '\', this)">Undo Reject</button>'
@@ -477,7 +485,14 @@ function cardHTML(j) {
   '</div>';
 }
 
-function applyJob(url) { window.open(url, '_blank'); }
+async function applyJob(id, url, btn) {
+  window.open(url, '_blank');
+  btn.disabled = true; btn.textContent = 'Applied';
+  await fetch('/api/apply', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({id}) });
+  const j = allJobs.find(j => j.id === id);
+  if (j) j.status = 'applied';
+  render();
+}
 
 async function saveJob(id, btn) {
   btn.disabled = true; btn.textContent = 'Saving...';
