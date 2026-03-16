@@ -31,20 +31,37 @@ const SEARCH_LOOP = 'C:\\agents\\omda\\search-loop.ps1';
 const SEARCH_LOG = 'C:/agents/omda/data/jobs/search-log.txt';
 
 function getAgentStatus(callback) {
-  exec('powershell -Command "Get-ScheduledTask -TaskName \'' + SEARCH_TASK + '\' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty State"',
-    { timeout: 10000 },
-    (err, stdout) => {
-      if (err) { callback({ status: 'idle' }); return; }
-      const state = (stdout || '').trim();
-      let status = 'idle';
-      if (state === 'Running') status = 'searching';
-      else if (state === 'Queued') status = 'queued';
-      // Read log for last line
-      let log = '';
-      try { const lines = fs.readFileSync(SEARCH_LOG, 'utf8').trim().split('\n'); log = lines[lines.length - 1] || ''; } catch {}
-      callback({ status, log });
+  // Check if search-loop PID is still alive
+  let pid = null;
+  try { pid = fs.readFileSync('C:\\temp\\search-loop.pid', 'utf8').trim(); } catch {}
+  let status = 'idle';
+  if (pid) {
+    try {
+      process.kill(Number(pid), 0); // signal 0 = check if alive
+      status = 'searching';
+    } catch {
+      // Process dead — clean up PID file
+      try { fs.unlinkSync('C:\\temp\\search-loop.pid'); } catch {}
+      status = 'idle';
     }
-  );
+  }
+  // Also check scheduled task as fallback
+  if (status === 'idle') {
+    exec('powershell -Command "Get-ScheduledTask -TaskName \'' + SEARCH_TASK + '\' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty State"',
+      { timeout: 5000 },
+      (err, stdout) => {
+        const state = (stdout || '').trim();
+        if (state === 'Running') status = 'searching';
+        let log = '';
+        try { const lines = fs.readFileSync(SEARCH_LOG, 'utf8').trim().split('\n'); log = lines[lines.length - 1] || ''; } catch {}
+        callback({ status, log });
+      }
+    );
+  } else {
+    let log = '';
+    try { const lines = fs.readFileSync(SEARCH_LOG, 'utf8').trim().split('\n'); log = lines[lines.length - 1] || ''; } catch {}
+    callback({ status, log });
+  }
 }
 
 function readJSON(file) {
@@ -258,31 +275,30 @@ const server = http.createServer((req, res) => {
           if (s.status === 'searching' || s.status === 'queued') {
             send(res, 200, { ok: false, reason: 'Already running' }); return;
           }
-          // Use pre-deployed start script
-          exec('powershell -ExecutionPolicy Bypass -File "C:\\temp\\start-search-loop.ps1"',
-            { timeout: 20000 },
-            (err, stdout, stderr) => {
-              const output = (stdout || '').trim();
-              send(res, 200, { ok: output.includes('started'), output, error: (stderr || '').trim() || undefined });
-            }
+          // Start search-loop as detached child process
+          const { spawn } = require('child_process');
+          const child = spawn('powershell.exe',
+            ['-ExecutionPolicy', 'Bypass', '-File', SEARCH_LOOP],
+            { detached: true, stdio: 'ignore', cwd: 'C:\\agents\\omda' }
           );
+          child.unref();
+          // Write PID so we can stop it later
+          try { fs.writeFileSync('C:\\temp\\search-loop.pid', String(child.pid), { encoding: 'utf8' }); } catch {}
+          send(res, 200, { ok: true, pid: child.pid });
         });
 
       } else if (pathname === '/api/agent-stop') {
-        const stopScript = [
-          'Stop-ScheduledTask -TaskName "' + SEARCH_TASK + '" -ErrorAction SilentlyContinue',
-          'Unregister-ScheduledTask -TaskName "' + SEARCH_TASK + '" -Confirm:$false -ErrorAction SilentlyContinue',
-          'Get-Process -Name claude -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue',
-          'Write-Host "stopped"'
-        ].join('\n');
-        const f = 'C:\\temp\\stop-search-' + Date.now() + '.ps1';
-        try { fs.writeFileSync(f, stopScript, { encoding: 'utf8' }); } catch {}
-        exec('powershell -ExecutionPolicy Bypass -File "' + f + '"',
-          { timeout: 15000 },
-          (err, stdout) => {
-            try { fs.unlinkSync(f); } catch {}
-            send(res, 200, { ok: !err });
-          }
+        // Kill by PID
+        let pid = null;
+        try { pid = fs.readFileSync('C:\\temp\\search-loop.pid', 'utf8').trim(); } catch {}
+        if (pid) {
+          try { process.kill(Number(pid)); } catch {}
+          try { fs.unlinkSync('C:\\temp\\search-loop.pid'); } catch {}
+        }
+        // Also kill claude processes and scheduled task
+        exec('powershell -Command "Stop-ScheduledTask -TaskName \'' + SEARCH_TASK + '\' -ErrorAction SilentlyContinue; Get-Process -Name claude -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue"',
+          { timeout: 10000 },
+          () => send(res, 200, { ok: true })
         );
 
       } else if (pathname === '/api/apply') {
