@@ -131,3 +131,22 @@ rtk init --global       # Add RTK to ~/.claude/CLAUDE.md
 
 Overall average: **60-90% token reduction** on common development operations.
 <!-- /rtk-instructions -->
+
+## Job Search Rules
+- Always show direct job posting links in results — never search/portal redirect links. Verify each URL points to the specific job posting.
+- Before discarding a job for a broken/expired link, search the internet for an alternative URL for that same position before removing it from the tracker.
+- Job searches default to 10-day freshness filter unless explicitly told otherwise.
+- Job search agents default to LinkedIn only as the search source. Do not expand to other platforms (IamExpat, Undutchables, Indeed, etc.) unless explicitly requested.
+- Always include salary range in job results and Telegram notifications. If not stated in the posting, write "not listed".
+- Hard exclude: managerial titles (Manager, Head of, Director, Lead, Senior Manager), jobs requiring 4+ years experience, hands-on physical supply chain roles.
+- Rank by years of experience required ascending — jobs requiring fewer years get higher priority (1yr > 2yr > 3yr). Mohammad is intentionally targeting roles he is overqualified for to maximize interview callback rate.
+
+## Guardrails
+- When constructing commands that cross shell boundaries (bash -> PowerShell, SSH -> cmd), ALWAYS write to a .ps1 file and execute via file path — never build inline quoted strings. Nested quote layers (single/double/escaped) across bash+SSH+PowerShell reliably break.
+- NEVER dispatch a new omda job search task if one is already running or queued. Always check `manage.ps1 status omda` first — if any task shows `running` or `queued`, refuse and inform the user. Stop the existing task first if a new one is needed.
+
+## Agent Factory
+- When creating agents, save the configuration as a reusable template in the create-agent skill.
+- VPS agents use Claude Max subscription auth (browser login), not Anthropic API keys. No API billing.
+- Agents have zero idle cost — they only consume resources during active task execution (scheduled task runs, completes, self-unregisters).
+- Store third-party API credentials (Telegram, Gmail, tokens) in `C:\secrets\<service>\` on the VPS — never in `C:\agents\`. Agent config files should only store the `secrets_path` reference, not the actual credentials.

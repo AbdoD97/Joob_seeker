@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Job Dashboard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #0f1117; color: #e1e4e8; min-height: 100vh; }
+
+  header { background: #161b22; border-bottom: 1px solid #30363d; padding: 16px 24px; display: flex; align-items: center; gap: 16px; }
+  header h1 { font-size: 18px; font-weight: 600; color: #f0f6fc; }
+  .meta { color: #8b949e; font-size: 13px; }
+  .header-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+  .sync-btn { background: #21262d; border: 1px solid #30363d; color: #c9d1d9; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .sync-btn:hover { background: #30363d; }
+  .clear-btn { background: #21262d; border: 1px solid #6e2020; color: #f85149; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .clear-btn:hover { background: #2d1a1a; }
+  .live-dot { width: 8px; height: 8px; border-radius: 50%; background: #3fb950; display: none; animation: pulse 1.5s infinite; }
+  .live-dot.active { display: inline-block; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .agent-status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #8b949e; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .status-dot.idle { background: #484f58; }
+  .status-dot.searching { background: #3fb950; animation: pulse 1.5s infinite; }
+  .status-dot.queued { background: #d29922; animation: pulse 1.5s infinite; }
+  .status-dot.failed { background: #f85149; }
+  .status-dot.unknown { background: #484f58; }
+  .search-btn { padding: 6px 14px; border-radius: 6px; border: 1px solid; font-size: 13px; cursor: pointer; font-weight: 500; transition: opacity 0.15s; }
+  .search-btn.start { background: #238636; border-color: #3fb950; color: #fff; }
+  .search-btn.start:hover { background: #2ea043; }
+  .search-btn.stop { background: #da3633; border-color: #f85149; color: #fff; }
+  .search-btn.stop:hover { background: #b91c1c; }
+  .search-btn:disabled { opacity: 0.4; cursor: default; }
+  .analyze-btn { background: #6e40c9; border: 1px solid #8b5cf6; color: #fff; padding: 6px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; }
+  .analyze-btn:hover { background: #7c3aed; }
+  .analyze-btn.has-rules { background: #1a3a5c; border-color: #58a6ff; color: #58a6ff; }
+
+  .filters { background: #161b22; border-bottom: 1px solid #30363d; padding: 12px 24px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  .filter-group { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #8b949e; }
+  .filter-group input[type=range] { accent-color: #58a6ff; }
+  .filter-group select { background: #21262d; border: 1px solid #30363d; color: #c9d1d9; padding: 4px 8px; border-radius: 6px; font-size: 13px; }
+  .filter-group label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .sort-btns { display: flex; gap: 6px; margin-left: auto; }
+  .sort-btn { background: #21262d; border: 1px solid #30363d; color: #8b949e; padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+  .sort-btn.active { background: #1f6feb; border-color: #58a6ff; color: #fff; }
+
+  .rules-bar { background: #1a1a2e; border-bottom: 1px solid #30363d; padding: 10px 24px; font-size: 12px; color: #8b5cf6; display: none; }
+  .rules-bar.visible { display: flex; align-items: center; gap: 10px; }
+  .rules-bar strong { color: #a78bfa; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(460px, 1fr)); gap: 16px; padding: 20px 24px; }
+
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 18px; transition: border-color 0.15s; }
+  .card:hover { border-color: #58a6ff44; }
+  .card.saved { border-color: #3fb95044; }
+  .card.rejected { opacity: 0.45; border-color: #30363d; }
+  .card.rule-flagged { border-color: #6e40c944; background: #1a1020; }
+
+  .card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+  .company { font-size: 13px; color: #8b949e; }
+  .badges { display: flex; gap: 6px; flex-wrap: wrap; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 500; }
+  .badge-fast { background: #1a4a1a; color: #3fb950; }
+  .badge-normal { background: #1a2a4a; color: #58a6ff; }
+  .badge-saved { background: #1a4a1a; color: #3fb950; }
+  .badge-rejected { background: #4a1a1a; color: #f85149; }
+  .badge-flagged { background: #2a1a4a; color: #a78bfa; }
+
+  .title { font-size: 16px; font-weight: 600; color: #f0f6fc; margin-bottom: 10px; line-height: 1.3; }
+
+  .meta-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 10px; font-size: 12px; color: #8b949e; }
+  .meta-item { display: flex; align-items: center; gap: 4px; }
+
+  .fit-bar-wrap { margin-bottom: 10px; }
+  .fit-label { font-size: 12px; color: #8b949e; margin-bottom: 4px; display: flex; justify-content: space-between; }
+  .fit-bar { height: 6px; background: #21262d; border-radius: 3px; overflow: hidden; }
+  .fit-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+  .fit-high { background: #3fb950; }
+  .fit-mid { background: #58a6ff; }
+  .fit-low { background: #d29922; }
+
+  .key-match { font-size: 12px; color: #8b949e; margin-bottom: 14px; line-height: 1.5; }
+  .rejection-reason { font-size: 12px; color: #f85149; margin-bottom: 10px; font-style: italic; }
+  .flag-reason { font-size: 11px; color: #a78bfa; margin-bottom: 10px; font-style: italic; }
+
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn { padding: 6px 14px; border-radius: 6px; border: 1px solid; font-size: 13px; cursor: pointer; font-weight: 500; transition: opacity 0.15s; }
+  .btn:hover { opacity: 0.85; }
+  .btn:disabled { opacity: 0.35; cursor: default; }
+  .btn-apply { background: #238636; border-color: #3fb950; color: #fff; }
+  .btn-save { background: #1f6feb; border-color: #58a6ff; color: #fff; }
+  .btn-reject { background: #da3633; border-color: #f85149; color: #fff; }
+  .btn-unreject { background: #21262d; border-color: #30363d; color: #8b949e; }
+
+  .empty { text-align: center; color: #8b949e; padding: 80px 24px; font-size: 15px; }
+
+  /* Analysis overlay */
+  .overlay { position: fixed; inset: 0; background: #000a; z-index: 200; display: none; align-items: center; justify-content: center; }
+  .overlay.open { display: flex; }
+  .panel { background: #161b22; border: 1px solid #30363d; border-radius: 12px; width: 760px; max-width: 95vw; max-height: 90vh; display: flex; flex-direction: column; }
+  .panel-header { padding: 18px 24px; border-bottom: 1px solid #30363d; display: flex; align-items: center; justify-content: space-between; }
+  .panel-header h2 { font-size: 16px; font-weight: 600; color: #f0f6fc; }
+  .panel-close { background: none; border: none; color: #8b949e; font-size: 20px; cursor: pointer; line-height: 1; }
+  .panel-close:hover { color: #f0f6fc; }
+  .panel-body { padding: 20px 24px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 16px; }
+  .panel-section { font-size: 12px; color: #8b949e; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+  .rejection-list { background: #0f1117; border: 1px solid #30363d; border-radius: 8px; padding: 14px; font-size: 12px; color: #c9d1d9; line-height: 1.7; max-height: 180px; overflow-y: auto; }
+  .rejection-list .rej-item { padding: 4px 0; border-bottom: 1px solid #21262d; }
+  .rejection-list .rej-item:last-child { border-bottom: none; }
+  .rejection-list .rej-company { color: #8b949e; }
+  .rejection-list .rej-reason { color: #f0f6fc; }
+  .rules-textarea { width: 100%; min-height: 220px; background: #0f1117; border: 1px solid #30363d; border-radius: 8px; padding: 14px; font-size: 13px; color: #e1e4e8; font-family: system-ui, sans-serif; line-height: 1.6; resize: vertical; }
+  .rules-textarea:focus { outline: none; border-color: #58a6ff; }
+  .panel-footer { padding: 16px 24px; border-top: 1px solid #30363d; display: flex; gap: 10px; justify-content: flex-end; }
+  .btn-primary { background: #238636; border: 1px solid #3fb950; color: #fff; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; }
+  .btn-primary:hover { background: #2ea043; }
+  .btn-secondary { background: #21262d; border: 1px solid #30363d; color: #c9d1d9; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+  .btn-secondary:hover { background: #30363d; }
+  .saved-notice { font-size: 12px; color: #3fb950; display: none; align-items: center; gap: 6px; margin-right: auto; }
+  .saved-notice.show { display: flex; }
+
+  #status-bar { position: fixed; bottom: 16px; right: 16px; background: #1f6feb; color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 13px; display: none; z-index: 99; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Job Dashboard</h1>
+  <span class="live-dot" id="liveDot" title="Live — polling for new jobs"></span>
+  <span class="meta" id="meta">Loading...</span>
+  <div class="header-right">
+    <div class="agent-status">
+      <span class="status-dot idle" id="agentDot"></span>
+      <span id="agentLabel">Checking...</span>
+    </div>
+    <button class="search-btn start" id="searchBtn" onclick="toggleSearch()" title="Start a new job search round" disabled>Start Search</button>
+    <button class="analyze-btn" id="analyzeBtn" onclick="openAnalysis()">Analyze Rejections</button>
+    <button class="sync-btn" onclick="loadData()" title="Refresh job list">Refresh</button>
+    <button class="clear-btn" onclick="clearTracker()" title="Remove all jobs from tracker">Clear Tracker</button>
+    <button class="clear-btn" onclick="clearRules()" title="Remove saved rules and rejection history">Clear Rules</button>
+  </div>
+</header>
+
+<div class="rules-bar" id="rulesBar">
+  <strong>Active rules:</strong> <span id="rulesPreview"></span>
+</div>
+
+<div class="filters">
+  <div class="filter-group">
+    Fit &ge; <input type="range" id="fitFilter" min="0" max="100" value="0" style="width:100px">
+    <span id="fitVal">0%</span>
+  </div>
+  <div class="filter-group">
+    Max exp:
+    <select id="yearsFilter">
+      <option value="">Any</option>
+      <option value="1">1 yr</option>
+      <option value="2">2 yr</option>
+      <option value="3">3 yr</option>
+      <option value="4">4 yr</option>
+      <option value="5">5 yr</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    Speed:
+    <select id="speedFilter">
+      <option value="">All</option>
+      <option value="fast">Fast (Recruiter/SME)</option>
+      <option value="normal">Normal</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <label><input type="checkbox" id="showRejected"> Show Rejected</label>
+  </div>
+  <div class="filter-group">
+    <label><input type="checkbox" id="showSaved" checked> Show Saved</label>
+  </div>
+  <div class="filter-group">
+    <label><input type="checkbox" id="showFlagged" checked> Show Rule-Flagged</label>
+  </div>
+  <div class="sort-btns">
+    <button class="sort-btn active" id="sortFit" onclick="setSort('fit')">Fit Score</button>
+    <button class="sort-btn" id="sortYears" onclick="setSort('years')">Years Req</button>
+  </div>
+</div>
+
+<div class="grid" id="grid"></div>
+<div id="status-bar"></div>
+
+<!-- Analysis overlay -->
+<div class="overlay" id="overlay" onclick="overlayClick(event)">
+  <div class="panel">
+    <div class="panel-header">
+      <h2>Rejection Analysis</h2>
+      <button class="panel-close" onclick="closeAnalysis()">x</button>
+    </div>
+    <div class="panel-body">
+      <div>
+        <div class="panel-section">Rejection History</div>
+        <div class="rejection-list" id="rejectionList">No rejections yet.</div>
+      </div>
+      <div>
+        <div class="panel-section">Rules &amp; Exclusion Criteria <span style="color:#8b949e;font-weight:400;text-transform:none;letter-spacing:0">&mdash; edit before saving</span></div>
+        <textarea class="rules-textarea" id="rulesText" placeholder="Edit the rules the agent should follow for future searches..."></textarea>
+      </div>
+    </div>
+    <div class="panel-footer">
+      <span class="saved-notice" id="savedNotice">Rules saved and active</span>
+      <button class="btn-secondary" onclick="closeAnalysis()">Close</button>
+      <button class="btn-primary" onclick="saveRules()">Save Rules</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let allJobs = [];
+let rejections = {};
+let sortMode = 'fit';
+let activeRules = null;
+let pollTimer = null;
+let lastJobCount = 0;
+let lastUpdated = '';
+let agentStatus = 'unknown';
+let jobStream = null;
+
+const STATUS_LABELS = { idle: 'Agent idle', searching: 'Searching...', queued: 'Queued', failed: 'Search failed', unknown: 'Unknown' };
+const SEARCH_BTN_TITLES = {
+  idle: 'Start a new job search round',
+  searching: 'Stop the running search task',
+  queued: 'Stop the queued search task',
+  failed: 'Search failed — click to retry',
+  unknown: 'Checking agent status...'
+};
+
+function updateAgentUI(s) {
+  agentStatus = s.status;
+  const dot = document.getElementById('agentDot');
+  const label = document.getElementById('agentLabel');
+  const btn = document.getElementById('searchBtn');
+  dot.className = 'status-dot ' + s.status;
+  label.textContent = STATUS_LABELS[s.status] || s.status;
+  if (s.status === 'searching' || s.status === 'queued') {
+    btn.textContent = 'Stop Search';
+    btn.className = 'search-btn stop';
+    btn.title = SEARCH_BTN_TITLES[s.status];
+  } else {
+    btn.textContent = s.status === 'failed' ? 'Retry Search' : 'Start Search';
+    btn.className = 'search-btn start';
+    btn.title = SEARCH_BTN_TITLES[s.status] || SEARCH_BTN_TITLES.idle;
+  }
+  btn.disabled = (s.status === 'unknown');
+}
+
+async function pollAgentStatus() {
+  try {
+    const s = await fetch('/api/agent-status').then(r => r.json());
+    updateAgentUI(s);
+  } catch {}
+}
+
+async function toggleSearch() {
+  const btn = document.getElementById('searchBtn');
+  btn.disabled = true;
+  if (agentStatus === 'searching' || agentStatus === 'queued') {
+    showStatus('Stopping search...');
+    const r = await fetch('/api/agent-stop', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' }).then(r => r.json());
+    showStatus(r.ok ? 'Search stopped' : 'Stop failed');
+  } else {
+    showStatus('Starting search...');
+    const r = await fetch('/api/agent-start', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' }).then(r => r.json());
+    if (!r.ok) showStatus(r.reason || 'Start failed');
+    else showStatus('Search started');
+  }
+  await pollAgentStatus();
+  btn.disabled = false;
+}
+
+function handleJobUpdate(data) {
+  const jobs = data.jobs || [];
+  const updated = data.last_updated || '';
+  if (jobs.length !== lastJobCount || updated !== lastUpdated) {
+    const added = jobs.length - lastJobCount;
+    lastJobCount = jobs.length;
+    lastUpdated = updated;
+    allJobs = jobs;
+    const round = data.round || '?';
+    document.getElementById('meta').textContent =
+      'Round ' + round + ' - ' + jobs.length + ' jobs - Updated ' + updated;
+    render();
+    if (added > 0) showStatus('+' + added + ' new job' + (added > 1 ? 's' : '') + ' found');
+  }
+}
+
+function startJobStream() {
+  if (jobStream) return;
+  jobStream = new EventSource('/api/jobs/stream');
+  jobStream.onmessage = function(e) {
+    try { handleJobUpdate(JSON.parse(e.data)); } catch {}
+  };
+  jobStream.onerror = function() {
+    // SSE dropped — reconnect after 5s (browser does this automatically but we reset state)
+    jobStream.close();
+    jobStream = null;
+    setTimeout(startJobStream, 5000);
+  };
+}
+
+async function pollJobs() {
+  try {
+    const data = await fetch('/api/jobs').then(r => r.json());
+    handleJobUpdate(data);
+  } catch {}
+}
+
+function startPolling() {
+  if (pollTimer) return;
+  document.getElementById('liveDot').classList.add('active');
+  startJobStream();
+  // Poll jobs as backup (SSE may miss changes), plus agent status
+  pollTimer = setInterval(() => { pollJobs(); pollAgentStatus(); }, 20000);
+}
+
+function stopPolling() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  if (jobStream) { jobStream.close(); jobStream = null; }
+  document.getElementById('liveDot').classList.remove('active');
+}
+
+async function loadData() {
+  showStatus('Loading...');
+  const [jobsRes, rejRes, rulesRes] = await Promise.all([
+    fetch('/api/jobs').then(r => r.json()),
+    fetch('/api/rejections').then(r => r.json()),
+    fetch('/api/rejection-rules').then(r => r.json()).catch(() => null)
+  ]);
+  allJobs = jobsRes.jobs || [];
+  lastJobCount = allJobs.length;
+  lastUpdated = jobsRes.last_updated || '';
+  rejections = {};
+  (rejRes || []).forEach(r => rejections[r.id] = r);
+  activeRules = rulesRes || null;
+
+  const round = jobsRes.round || '?';
+  document.getElementById('meta').textContent =
+    'Round ' + round + ' - ' + allJobs.length + ' jobs - Updated ' + lastUpdated;
+  startPolling();
+  pollAgentStatus();
+
+  const rejCount = Object.keys(rejections).length;
+  const btn = document.getElementById('analyzeBtn');
+  if (rejCount > 0) {
+    btn.textContent = 'Analyze Rejections (' + rejCount + ')';
+  }
+  if (activeRules) {
+    btn.classList.add('has-rules');
+    btn.textContent = 'Edit Rules (' + rejCount + ' rejected)';
+    const bar = document.getElementById('rulesBar');
+    bar.classList.add('visible');
+    const preview = (activeRules.rules_text || '').split('\n').filter(l => l.trim()).slice(0, 2).join(' / ');
+    document.getElementById('rulesPreview').textContent = preview || 'Active';
+  }
+
+  render();
+  hideStatus();
+}
+
+function getFlaggedInfo(j) {
+  if (!activeRules || !activeRules.keywords || !activeRules.keywords.length) return null;
+  const haystack = ((j.title || '') + ' ' + (j.company || '') + ' ' + (j.key_match || '')).toLowerCase();
+  const hits = activeRules.keywords.filter(kw => haystack.includes(kw.toLowerCase()));
+  return hits.length ? hits : null;
+}
+
+function setSort(mode) {
+  sortMode = mode;
+  document.getElementById('sortFit').classList.toggle('active', mode === 'fit');
+  document.getElementById('sortYears').classList.toggle('active', mode === 'years');
+  render();
+}
+
+function render() {
+  const fitMin = +document.getElementById('fitFilter').value;
+  const maxYears = document.getElementById('yearsFilter').value;
+  const speed = document.getElementById('speedFilter').value;
+  const showRej = document.getElementById('showRejected').checked;
+  const showSaved = document.getElementById('showSaved').checked;
+  const showFlagged = document.getElementById('showFlagged').checked;
+
+  let jobs = allJobs.filter(j => {
+    const fit = j.fit_score ?? j.fit ?? 0;
+    if (fit < fitMin) return false;
+    if (maxYears) {
+      const yrs = parseFloat(j.years_required) || 0;
+      if (yrs > +maxYears) return false;
+    }
+    if (speed && j.interview_speed !== speed) return false;
+    const isRej = !!rejections[j.id];
+    if (isRej && !showRej) return false;
+    if (j.status === 'saved' && !showSaved) return false;
+    const isFlagged = !!getFlaggedInfo(j) && !isRej;
+    if (isFlagged && !showFlagged) return false;
+    return true;
+  });
+
+  if (sortMode === 'fit') {
+    jobs.sort((a, b) => (b.fit_score ?? b.fit ?? 0) - (a.fit_score ?? a.fit ?? 0));
+  } else {
+    jobs.sort((a, b) => {
+      const ay = parseFloat(a.years_required) || 99;
+      const by = parseFloat(b.years_required) || 99;
+      return ay - by;
+    });
+  }
+
+  const grid = document.getElementById('grid');
+  if (!jobs.length) {
+    grid.innerHTML = '<div class="empty">No jobs match your filters.</div>';
+    return;
+  }
+  grid.innerHTML = jobs.map(cardHTML).join('');
+}
+
+function cardHTML(j) {
+  const fit = j.fit_score ?? j.fit ?? 0;
+  const rej = rejections[j.id];
+  const isSaved = j.status === 'saved';
+  const isRej = !!rej;
+  const flaggedKws = !isRej ? getFlaggedInfo(j) : null;
+  const isFlagged = !!flaggedKws;
+
+  const fitClass = fit >= 85 ? 'fit-high' : fit >= 75 ? 'fit-mid' : 'fit-low';
+  const speedBadge = j.interview_speed === 'fast'
+    ? '<span class="badge badge-fast">Fast</span>'
+    : '<span class="badge badge-normal">Normal</span>';
+  const statusBadge = isSaved ? '<span class="badge badge-saved">Saved</span>'
+    : isRej ? '<span class="badge badge-rejected">Rejected</span>'
+    : isFlagged ? '<span class="badge badge-flagged">Rule Match</span>' : '';
+
+  const rejHtml = isRej ? '<div class="rejection-reason">Rejected: ' + escHtml(rej.reason) + '</div>' : '';
+  const flagHtml = isFlagged ? '<div class="flag-reason">Matches rule keywords: ' + escHtml(flaggedKws.join(', ')) + '</div>' : '';
+
+  const salary = j.salary && j.salary !== 'not listed' ? j.salary : '';
+  const years = j.years_required ? j.years_required + ' yrs' : '';
+  const loc = j.location || '';
+  const deadline = j.deadline && j.deadline !== 'unknown' ? j.deadline : '';
+  const applicants = j.applicant_count != null ? j.applicant_count + ' applicants' : '';
+
+  const cardClass = 'card' + (isSaved ? ' saved' : '') + (isRej ? ' rejected' : '') + (isFlagged && !isRej ? ' rule-flagged' : '');
+
+  return '<div class="' + cardClass + '" id="card-' + j.id + '">' +
+    '<div class="card-top">' +
+      '<span class="company">' + escHtml(j.company || '') + '</span>' +
+      '<div class="badges">' + speedBadge + statusBadge + '</div>' +
+    '</div>' +
+    '<div class="title">' + escHtml(j.title || '') + '</div>' +
+    '<div class="meta-row">' +
+      (loc ? '<span class="meta-item">' + escHtml(loc) + '</span>' : '') +
+      (salary ? '<span class="meta-item">' + escHtml(salary) + '</span>' : '') +
+      (years ? '<span class="meta-item">' + escHtml(years) + '</span>' : '') +
+      (deadline ? '<span class="meta-item" style="color:#d29922">' + escHtml(deadline) + '</span>' : '') +
+      (applicants ? '<span class="meta-item" style="color:#8b949e">' + escHtml(applicants) + '</span>' : '') +
+    '</div>' +
+    '<div class="fit-bar-wrap">' +
+      '<div class="fit-label"><span>Fit Score</span><span>' + fit + '%</span></div>' +
+      '<div class="fit-bar"><div class="fit-fill ' + fitClass + '" style="width:' + fit + '%"></div></div>' +
+    '</div>' +
+    (j.key_match ? '<div class="key-match">' + escHtml(j.key_match) + '</div>' : '') +
+    rejHtml + flagHtml +
+    '<div class="actions">' +
+      '<button class="btn btn-apply" onclick="applyJob(\'' + escAttr(j.url) + '\')">Apply</button>' +
+      '<button class="btn btn-save" ' + (isSaved ? 'disabled' : '') + ' onclick="saveJob(' + j.id + ', this)">' + (isSaved ? 'Saved' : 'Save') + '</button>' +
+      (isRej
+        ? '<button class="btn btn-unreject" onclick="unrejectJob(' + j.id + ', \'' + escAttr(j.company) + '\', \'' + escAttr(j.title) + '\', this)">Undo Reject</button>'
+        : '<button class="btn btn-reject" onclick="rejectJob(' + j.id + ', \'' + escAttr(j.company) + '\', \'' + escAttr(j.title) + '\', this)">Reject</button>') +
+    '</div>' +
+  '</div>';
+}
+
+function applyJob(url) { window.open(url, '_blank'); }
+
+async function saveJob(id, btn) {
+  btn.disabled = true; btn.textContent = 'Saving...';
+  const r = await fetch('/api/save', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({id}) });
+  const d = await r.json();
+  if (d.ok) { allJobs.find(j => j.id === id).status = 'saved'; render(); showStatus('Saved!'); }
+  else { btn.disabled = false; btn.textContent = 'Save'; showStatus('Save failed'); }
+}
+
+async function rejectJob(id, company, title, btn) {
+  const reason = prompt('Reason for rejecting:\n' + company + ' - ' + title);
+  if (!reason || !reason.trim()) return;
+  btn.disabled = true;
+  const r = await fetch('/api/reject', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({id, company, title, reason: reason.trim()}) });
+  const d = await r.json();
+  if (d.ok) {
+    rejections[id] = {id, company, title, reason: reason.trim()};
+    render();
+    showStatus('Rejected - run Analyze to update rules');
+    const btn2 = document.getElementById('analyzeBtn');
+    const cnt = Object.keys(rejections).length;
+    btn2.textContent = (activeRules ? 'Edit Rules' : 'Analyze Rejections') + ' (' + cnt + ')';
+  } else { btn.disabled = false; showStatus('Error saving rejection'); }
+}
+
+async function unrejectJob(id, company, title, btn) {
+  btn.disabled = true;
+  const r = await fetch('/api/unreject', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({id}) });
+  const d = await r.json();
+  if (d.ok) { delete rejections[id]; render(); }
+  else { btn.disabled = false; }
+}
+
+async function openAnalysis() {
+  const list = document.getElementById('rejectionList');
+  const rejs = Object.values(rejections);
+  if (!rejs.length) {
+    list.innerHTML = '<em style="color:#8b949e">No rejections yet.</em>';
+  } else {
+    list.innerHTML = rejs.map(r =>
+      '<div class="rej-item"><span class="rej-company">' + escHtml(r.company) + ' - ' + escHtml(r.title) + ':</span> <span class="rej-reason">' + escHtml(r.reason) + '</span></div>'
+    ).join('');
+  }
+
+  const ta = document.getElementById('rulesText');
+  document.getElementById('savedNotice').classList.remove('show');
+  document.getElementById('overlay').classList.add('open');
+
+  const currentIds = rejs.map(r => r.id);
+  const analyzedIds = (activeRules && activeRules.analyzed_ids) || [];
+  // New rejection = ID not yet analyzed. If analyzed_ids missing (old save), fall back to count comparison.
+  const hasNewRejections = analyzedIds.length > 0
+    ? currentIds.some(id => !analyzedIds.includes(id))
+    : currentIds.length > (activeRules && activeRules.rejection_count || 0);
+
+  if (activeRules && activeRules.rules_text && !hasNewRejections) {
+    // Rules are up to date — just show existing text, no re-analysis needed
+    ta.value = activeRules.rules_text;
+    ta._pendingKeywords = null;
+  } else if (rejs.length) {
+    ta.value = 'Analyzing rejection reasons with AI...';
+    ta.disabled = true;
+    try {
+      const r = await fetch('/api/analyze-rejections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rejections: rejs })
+      });
+      const d = await r.json();
+      if (d.rules_text) {
+        ta.value = d.rules_text;
+        ta._pendingKeywords = d.keywords || [];
+      } else {
+        ta.value = buildDefaultRules(rejs);
+        ta._pendingKeywords = null;
+      }
+    } catch {
+      ta.value = buildDefaultRules(rejs);
+      ta._pendingKeywords = null;
+    }
+    ta.disabled = false;
+  } else {
+    ta.value = '';
+    ta._pendingKeywords = null;
+  }
+}
+
+function buildDefaultRules(rejs) {
+  const lines = ['EXCLUSION RULES FOR NEXT SEARCH:'];
+  const reasonText = rejs.map(r => r.reason).join(' ').toLowerCase();
+  const titleWords = new Set();
+  rejs.forEach(r => {
+    r.title.split(/\s+/).forEach(w => {
+      const wl = w.toLowerCase().replace(/[^a-z]/g, '');
+      if (wl.length > 3 && !['with','from','and','for','the','this','that'].includes(wl)) titleWords.add(wl);
+    });
+  });
+  if (titleWords.size) lines.push('- Avoid titles containing: ' + [...titleWords].join(', '));
+  if (/manag|lead|director|head of/i.test(reasonText)) lines.push('- Exclude managerial/leadership roles');
+  if (/dutch|taal|language/i.test(reasonText)) lines.push('- Exclude roles requiring Dutch language');
+  if (/year|experience|senior/i.test(reasonText)) lines.push('- Exclude roles requiring excessive years of experience');
+  lines.push('');
+  lines.push('KEYWORDS TO FLAG (comma-separated):');
+  lines.push([...titleWords].slice(0, 8).join(', ') || '(add keywords here)');
+  return lines.join('\n');
+}
+
+function extractKeywords(text) {
+  const kws = new Set();
+  // From "KEYWORDS TO FLAG" line — take the next content line
+  const kwMatch = text.match(/KEYWORDS TO FLAG[^\n]*\n([^\n]+)/i);
+  if (kwMatch) {
+    kwMatch[1].split(',').map(k => k.trim().toLowerCase().replace(/[[\]()]/g, '').trim())
+      .filter(k => k && k.length > 1 && k !== 'add keywords here')
+      .forEach(k => kws.add(k));
+  }
+  // From "Avoid titles containing: X, Y" lines
+  (text.match(/avoid[^\n]*containing[:\s]+([^\n]+)/gi) || []).forEach(line => {
+    line.replace(/avoid[^\n]*containing[:\s]+/i, '')
+      .split(',').map(k => k.trim().toLowerCase()).filter(k => k.length > 2)
+      .forEach(k => kws.add(k));
+  });
+  return [...kws];
+}
+
+async function saveRules() {
+  const ta = document.getElementById('rulesText');
+  const text = ta.value.trim();
+  if (!text) { showStatus('Nothing to save'); return; }
+
+  // Use keywords from AI analysis if available, otherwise extract from text
+  const keywords = ta._pendingKeywords && ta._pendingKeywords.length
+    ? ta._pendingKeywords
+    : extractKeywords(text);
+
+  const rejIds = Object.keys(rejections).map(Number);
+  const payload = { rules_text: text, keywords, updated: new Date().toISOString().slice(0, 10), analyzed_ids: rejIds, rejection_count: rejIds.length };
+  const r = await fetch('/api/rejection-rules', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+  const d = await r.json();
+  if (d.ok) {
+    activeRules = payload;
+    document.getElementById('savedNotice').classList.add('show');
+    document.getElementById('analyzeBtn').classList.add('has-rules');
+    document.getElementById('analyzeBtn').textContent = 'Edit Rules (' + Object.keys(rejections).length + ' rejected)';
+    const bar = document.getElementById('rulesBar');
+    bar.classList.add('visible');
+    const preview = text.split('\n').filter(l => l.trim() && l.startsWith('-')).slice(0, 2).map(l => l.replace(/^-\s*/, '')).join(' / ');
+    document.getElementById('rulesPreview').textContent = preview || 'Active';
+    render();
+    showStatus('Rules saved - ' + keywords.length + ' keywords active, ' + document.querySelectorAll('.rule-flagged').length + ' jobs flagged');
+  } else {
+    showStatus('Error saving rules');
+  }
+}
+
+async function clearRules() {
+  if (!confirm('Clear all saved rules? This cannot be undone.')) return;
+  const r = await fetch('/api/clear-rules', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' });
+  const d = await r.json();
+  if (d.ok) {
+    activeRules = null;
+    rejections = {};
+    document.getElementById('analyzeBtn').classList.remove('has-rules');
+    document.getElementById('analyzeBtn').textContent = 'Analyze Rejections';
+    document.getElementById('rulesBar').classList.remove('visible');
+    render();
+    showStatus('Rules and rejection history cleared');
+  } else showStatus('Failed to clear rules');
+}
+
+async function clearTracker() {
+  if (!confirm('Clear all jobs from the tracker? This cannot be undone.')) return;
+  const r = await fetch('/api/clear-tracker', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' });
+  const d = await r.json();
+  if (d.ok) { allJobs = []; rejections = {}; activeRules = null; render(); showStatus('Tracker cleared'); document.getElementById('meta').textContent = 'Round 0 - 0 jobs'; }
+  else showStatus('Failed to clear tracker');
+}
+
+function closeAnalysis() { document.getElementById('overlay').classList.remove('open'); }
+function overlayClick(e) { if (e.target === document.getElementById('overlay')) closeAnalysis(); }
+
+function showStatus(msg) {
+  const el = document.getElementById('status-bar');
+  el.textContent = msg; el.style.display = 'block';
+  clearTimeout(window._st);
+  window._st = setTimeout(() => el.style.display = 'none', 3000);
+}
+function hideStatus() { document.getElementById('status-bar').style.display = 'none'; }
+function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function escAttr(s) { return String(s).replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
+
+document.getElementById('fitFilter').addEventListener('input', function() {
+  document.getElementById('fitVal').textContent = this.value + '%';
+  render();
+});
+document.getElementById('yearsFilter').addEventListener('change', render);
+document.getElementById('speedFilter').addEventListener('change', render);
+document.getElementById('showRejected').addEventListener('change', render);
+document.getElementById('showSaved').addEventListener('change', render);
+document.getElementById('showFlagged').addEventListener('change', render);
+
+loadData();
+</script>
+</body>
+</html>
