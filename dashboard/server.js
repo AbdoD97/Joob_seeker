@@ -303,6 +303,12 @@ const server = http.createServer((req, res) => {
         for (const j of (data.jobs || [])) { if (j.id === b.id) j.status = 'applied'; }
         send(res, 200, { ok: writeJSON(TRACKER, data) });
 
+      } else if (pathname === '/api/unapply') {
+        const data = readJSON(TRACKER);
+        if (!data) { send(res, 200, { ok: false }); return; }
+        for (const j of (data.jobs || [])) { if (j.id === b.id) j.status = 'active'; }
+        send(res, 200, { ok: writeJSON(TRACKER, data) });
+
       } else if (pathname === '/api/clear-tracker') {
         const empty = { round: 0, last_updated: '', jobs: [] };
         send(res, 200, { ok: writeJSON(TRACKER, empty) });

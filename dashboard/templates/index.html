@@ -492,7 +492,9 @@ function cardHTML(j) {
     (j.key_match ? '<div class="key-match">' + escHtml(j.key_match) + '</div>' : '') +
     rejHtml + flagHtml +
     '<div class="actions">' +
-      '<button class="btn btn-apply" ' + (isApplied ? 'disabled' : '') + ' onclick="applyJob(' + j.id + ', \'' + escAttr(j.url) + '\', this)">' + (isApplied ? 'Applied' : 'Apply') + '</button>' +
+      (isApplied
+        ? '<button class="btn btn-unreject" onclick="unapplyJob(' + j.id + ', this)">Undo Apply</button>'
+        : '<button class="btn btn-apply" onclick="applyJob(' + j.id + ', \'' + escAttr(j.url) + '\', this)">Apply</button>') +
       '<button class="btn btn-save" ' + (isSaved ? 'disabled' : '') + ' onclick="saveJob(' + j.id + ', this)">' + (isSaved ? 'Saved' : 'Save') + '</button>' +
       (isRej
         ? '<button class="btn btn-unreject" onclick="unrejectJob(' + j.id + ', \'' + escAttr(j.company) + '\', \'' + escAttr(j.title) + '\', this)">Undo Reject</button>'
@@ -507,6 +509,14 @@ async function applyJob(id, url, btn) {
   await fetch('/api/apply', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({id}) });
   const j = allJobs.find(j => j.id === id);
   if (j) j.status = 'applied';
+  render();
+}
+
+async function unapplyJob(id, btn) {
+  btn.disabled = true;
+  await fetch('/api/unapply', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({id}) });
+  const j = allJobs.find(j => j.id === id);
+  if (j) j.status = 'active';
   render();
 }
 
