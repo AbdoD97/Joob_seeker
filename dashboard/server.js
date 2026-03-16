@@ -119,13 +119,16 @@ function analyzeRejections(rejections, callback) {
 
 // SSE: watch tracker.json for changes and push to connected clients
 const sseClients = new Set();
-let lastTrackerContent = '';
+let lastTrackerMtime = 0;
 let trackerWatcher = null;
 
 function broadcastJobs() {
+  let mtime;
+  try { mtime = fs.statSync(TRACKER).mtimeMs; } catch { return; }
+  if (mtime === lastTrackerMtime) return;
+  lastTrackerMtime = mtime;
   const raw = (() => { try { return fs.readFileSync(TRACKER, 'utf8'); } catch { return ''; } })();
-  if (raw === lastTrackerContent || !raw) return;
-  lastTrackerContent = raw;
+  if (!raw) return;
   const data = (() => { try { return JSON.parse(raw); } catch { return null; } })();
   if (!data) return;
   for (const j of (data.jobs || [])) {
@@ -146,8 +149,8 @@ function startTrackerWatch() {
       if (filename === file) broadcastJobs();
     });
   } catch {}
-  // Fallback poll every 5s in case fs.watch misses events on Windows
-  setInterval(broadcastJobs, 5000);
+  // Fallback poll every 2s in case fs.watch misses events on Windows
+  setInterval(broadcastJobs, 2000);
 }
 startTrackerWatch();
 

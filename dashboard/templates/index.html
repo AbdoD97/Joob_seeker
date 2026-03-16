@@ -252,6 +252,10 @@ function updateAgentUI(s) {
     btn.title = SEARCH_BTN_TITLES[s.status] || SEARCH_BTN_TITLES.idle;
   }
   btn.disabled = (s.status === 'unknown');
+  // Show search progress from log
+  if (s.log && s.status === 'searching') {
+    label.textContent = s.log.replace(/^\[.*?\]\s*/, '');
+  }
 }
 
 async function pollAgentStatus() {
@@ -322,7 +326,7 @@ function startPolling() {
   document.getElementById('liveDot').classList.add('active');
   startJobStream();
   // Poll jobs as backup (SSE may miss changes), plus agent status
-  pollTimer = setInterval(() => { pollJobs(); pollAgentStatus(); }, 20000);
+  pollTimer = setInterval(() => { pollJobs(); pollAgentStatus(); }, 10000);
 }
 
 function stopPolling() {
