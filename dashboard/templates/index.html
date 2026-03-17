@@ -134,10 +134,12 @@
   .panel-body { padding: 20px 24px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 16px; }
   .panel-section { font-size: 12px; color: #8b949e; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
   .rejection-list { background: #0f1117; border: 1px solid #30363d; border-radius: 8px; padding: 14px; font-size: 12px; color: #c9d1d9; line-height: 1.7; max-height: 180px; overflow-y: auto; }
-  .rejection-list .rej-item { padding: 4px 0; border-bottom: 1px solid #21262d; }
+  .rejection-list .rej-item { padding: 6px 0; border-bottom: 1px solid #21262d; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .rejection-list .rej-item:last-child { border-bottom: none; }
   .rejection-list .rej-company { color: #8b949e; }
   .rejection-list .rej-reason { color: #f0f6fc; }
+  .rej-undo { background: none; border: 1px solid #30363d; color: #8b949e; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; flex-shrink: 0; }
+  .rej-undo:hover { background: #21262d; color: #f85149; border-color: #f85149; }
   .rules-textarea { width: 100%; min-height: 220px; background: #0f1117; border: 1px solid #30363d; border-radius: 8px; padding: 14px; font-size: 13px; color: #e1e4e8; font-family: system-ui, sans-serif; line-height: 1.6; resize: vertical; }
   .rules-textarea:focus { outline: none; border-color: #58a6ff; }
   .panel-footer { padding: 16px 24px; border-top: 1px solid #30363d; display: flex; gap: 10px; justify-content: flex-end; }
@@ -720,7 +722,8 @@ async function openAnalysis() {
     list.innerHTML = '<em style="color:#8b949e">No rejections yet.</em>';
   } else {
     list.innerHTML = rejs.map(r =>
-      '<div class="rej-item"><span class="rej-company">' + escHtml(r.company) + ' - ' + escHtml(r.title) + ':</span> <span class="rej-reason">' + escHtml(r.reason) + '</span></div>'
+      '<div class="rej-item"><div><span class="rej-company">' + escHtml(r.company) + ' - ' + escHtml(r.title) + ':</span> <span class="rej-reason">' + escHtml(r.reason) + '</span></div>' +
+      '<button class="rej-undo" onclick="undoRejectionInPanel(' + r.id + ', this)">Undo</button></div>'
     ).join('');
   }
 
@@ -856,6 +859,24 @@ async function clearTracker() {
   const d = await r.json();
   if (d.ok) { allJobs = []; rejections = {}; activeRules = null; render(); showStatus('Tracker cleared'); document.getElementById('meta').textContent = 'Round 0 - 0 jobs'; }
   else showStatus('Failed to clear tracker');
+}
+
+async function undoRejectionInPanel(id, btn) {
+  btn.disabled = true;
+  btn.textContent = '...';
+  const r = await fetch('/api/unreject', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({id}) }).then(r => r.json());
+  if (r.ok) {
+    delete rejections[id];
+    btn.closest('.rej-item').remove();
+    render();
+    const cnt = Object.keys(rejections).length;
+    const btn2 = document.getElementById('analyzeBtn');
+    btn2.textContent = cnt > 0 ? (activeRules ? 'Edit Rules' : 'Analyze Rejections') + ' (' + cnt + ')' : 'Analyze Rejections';
+    if (!cnt) document.getElementById('rejectionList').innerHTML = '<em style="color:#8b949e">No rejections yet.</em>';
+  } else {
+    btn.disabled = false;
+    btn.textContent = 'Undo';
+  }
 }
 
 async function showContext() {
