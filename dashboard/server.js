@@ -64,7 +64,7 @@ function getAgentStatus(callback) {
 }
 
 function parseSearchLog() {
-  let log = '', iteration = null, maxIterations = 8, phase = '';
+  let log = '', iteration = null, maxIterations = 12, phase = '';
   try {
     const lines = fs.readFileSync(SEARCH_LOG, 'utf8').trim().split('\n');
     log = lines[lines.length - 1] || '';
@@ -261,6 +261,17 @@ const server = http.createServer((req, res) => {
   if (req.method === 'GET' && pathname === '/api/rejection-rules') {
     const data = readJSON(REJECTION_RULES_JSON);
     send(res, 200, data || null);
+    return;
+  }
+
+  if (req.method === 'GET' && pathname === '/api/agent-context') {
+    const agentMd = 'C:/agents/omda/CLAUDE.md';
+    try {
+      const content = fs.readFileSync(agentMd, 'utf8');
+      send(res, 200, { ok: true, content });
+    } catch (e) {
+      send(res, 200, { ok: false, error: e.message });
+    }
     return;
   }
 

@@ -148,6 +148,10 @@
   .saved-notice { font-size: 12px; color: #3fb950; display: none; align-items: center; gap: 6px; margin-right: auto; }
   .saved-notice.show { display: flex; }
 
+  .context-pre { background: #0f1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px; font-size: 12px; color: #c9d1d9; font-family: 'Cascadia Code', 'Fira Code', monospace; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; overflow-y: auto; max-height: 70vh; }
+  .context-pre h1, .context-pre h2, .context-pre h3 { color: #58a6ff; margin: 12px 0 6px; }
+  .context-pre strong { color: #f0f6fc; }
+
   #status-bar { position: fixed; bottom: 16px; right: 16px; background: #1f6feb; color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 13px; display: none; z-index: 99; }
 </style>
 </head>
@@ -168,6 +172,7 @@
     </div>
     <button class="search-btn start" id="searchBtn" onclick="toggleSearch()" title="Start a new job search round" disabled>Start Search</button>
     <button class="analyze-btn" id="analyzeBtn" onclick="openAnalysis()">Analyze Rejections</button>
+    <button class="sync-btn" onclick="showContext()" title="View omda agent context/instructions">Agent Context</button>
     <button class="sync-btn" onclick="loadData()" title="Refresh job list">Refresh</button>
     <button class="clear-btn" onclick="clearTracker()" title="Remove all jobs from tracker">Clear Tracker</button>
     <button class="clear-btn" onclick="clearRules()" title="Remove saved rules and rejection history">Clear Rules</button>
@@ -243,6 +248,21 @@
     <button class="skipped-clear-btn" onclick="clearSkipped()">Clear Skipped</button>
   </div>
   <div id="skippedContent"></div>
+</div>
+
+<div class="overlay" id="contextOverlay" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="panel" style="width:900px">
+    <div class="panel-header">
+      <h2>Omda Agent Context</h2>
+      <button class="panel-close" onclick="document.getElementById('contextOverlay').classList.remove('open')">x</button>
+    </div>
+    <div class="panel-body">
+      <pre class="context-pre" id="contextContent">Loading...</pre>
+    </div>
+    <div class="panel-footer">
+      <button class="btn-secondary" onclick="document.getElementById('contextOverlay').classList.remove('open')">Close</button>
+    </div>
+  </div>
 </div>
 
 <div id="status-bar"></div>
@@ -836,6 +856,21 @@ async function clearTracker() {
   const d = await r.json();
   if (d.ok) { allJobs = []; rejections = {}; activeRules = null; render(); showStatus('Tracker cleared'); document.getElementById('meta').textContent = 'Round 0 - 0 jobs'; }
   else showStatus('Failed to clear tracker');
+}
+
+async function showContext() {
+  document.getElementById('contextOverlay').classList.add('open');
+  document.getElementById('contextContent').textContent = 'Loading agent context...';
+  try {
+    const r = await fetch('/api/agent-context').then(r => r.json());
+    if (r.ok) {
+      document.getElementById('contextContent').textContent = r.content;
+    } else {
+      document.getElementById('contextContent').textContent = 'Error: ' + (r.error || 'Could not load context');
+    }
+  } catch (e) {
+    document.getElementById('contextContent').textContent = 'Error: ' + e.message;
+  }
 }
 
 function closeAnalysis() { document.getElementById('overlay').classList.remove('open'); }

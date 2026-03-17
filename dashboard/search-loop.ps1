@@ -1,7 +1,7 @@
 $tracker = "C:\agents\omda\data\jobs\tracker.json"
 $maxPerRound = 30
 $maxTotal = 100
-$maxIterations = 8
+$maxIterations = 12
 $maxLoopMinutes = 30
 $agentDir = "C:\agents\omda"
 $logFile = "C:\agents\omda\data\jobs\search-log.txt"
@@ -36,15 +36,13 @@ for ($i = 1; $i -le $maxIterations; $i++) {
         "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Total cap reached: $count/$maxTotal jobs. Stopping." | Out-File $logFile -Append -Encoding UTF8
         break
     }
-    $remaining = [Math]::Min(5, [Math]::Min($maxPerRound - $addedThisRound, $maxTotal - $count))
+    $remaining = [Math]::Min(3, [Math]::Min($maxPerRound - $addedThisRound, $maxTotal - $count))
 
-    $prompt = "You are in search iteration $i. tracker.json currently has $count jobs. " +
-              "Search LinkedIn for $remaining MORE new jobs matching criteria in your CLAUDE.md. " +
-              "Read tracker.json first, append new jobs (keep existing ones), save tracker.json. " +
-              "Do NOT search for more than $remaining jobs. Do NOT overwrite existing jobs. " +
-              "IMPORTANT: For any job posting you look at but decide NOT to add (wrong fit, wrong criteria, " +
-              "duplicate, etc.), append it to C:\agents\omda\data\jobs\skipped.json with format: " +
-              "{company, title, url, location, reason, date}. Read skipped.json first, keep existing entries, append new ones."
+    $prompt = "Search iteration $i. tracker.json has $count jobs. Find $remaining MORE new jobs. " +
+              "Use the Job Search Platform Guide in your CLAUDE.md for URL patterns. " +
+              "Search Indeed NL (nl.indeed.com/jobs?q=...) and IamExpat (iamexpat.nl/career/jobs-netherlands/...). " +
+              "Read tracker.json first, append new jobs, save immediately. Do NOT overwrite existing jobs. " +
+              "Log skipped jobs to skipped.json. Be fast -- find jobs, save them, move on."
 
     "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Iteration $i starting ($count jobs so far, finding $remaining more)" | Out-File $logFile -Append -Encoding UTF8
 
