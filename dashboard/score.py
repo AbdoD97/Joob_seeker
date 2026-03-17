@@ -70,24 +70,29 @@ def score_batch(jobs):
     prompt = SCORING_PROMPT_TEMPLATE.format(jobs_block=jobs_block)
 
     try:
-        # Write prompt to temp file to avoid Windows command-line length limit
-        import tempfile
-        prompt_file = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8')
-        prompt_file.write(prompt)
-        prompt_file.close()
+        # Write prompt to temp file and create a .ps1 runner to avoid cmd line limit
+        import tempfile, os
+        prompt_path = os.path.join(tempfile.gettempdir(), f'score-prompt-{os.getpid()}.txt')
+        runner_path = os.path.join(tempfile.gettempdir(), f'score-runner-{os.getpid()}.ps1')
+
+        with open(prompt_path, 'w', encoding='utf-8') as f:
+            f.write(prompt)
+
+        with open(runner_path, 'w', encoding='utf-8') as f:
+            f.write(f'$p = Get-Content \'{prompt_path}\' -Raw\n')
+            f.write(f'& "C:\\Users\\Administrator\\AppData\\Roaming\\npm\\claude.cmd" --print -m sonnet $p\n')
 
         try:
-            # Use PowerShell to read file and pipe to claude
-            ps_cmd = f'$p = Get-Content \'{prompt_file.name}\' -Raw; & "C:\\Users\\Administrator\\AppData\\Roaming\\npm\\claude.cmd" --print -m sonnet $p'
             result = subprocess.run(
-                ["powershell", "-Command", ps_cmd],
+                ["powershell", "-ExecutionPolicy", "Bypass", "-File", runner_path],
                 capture_output=True,
                 text=True,
                 timeout=180,
             )
         finally:
-            import os
-            os.unlink(prompt_file.name)
+            for fp in [prompt_path, runner_path]:
+                try: os.unlink(fp)
+                except: pass
     except subprocess.TimeoutExpired:
         print("  ERROR: Claude CLI timed out after 120s")
         return None

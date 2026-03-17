@@ -74,7 +74,7 @@ if ($elapsed -ge ($maxLoopMinutes - 3)) {
 "[$(AmsTime)] Stage 3: Scoring $filteredCount jobs with Claude..." | Out-File $logFile -Append -Encoding UTF8
 
 try {
-    & python "$dashboardDir\score.py" --input $filteredFile --tracker $tracker --batch-size 20 2>&1 | ForEach-Object {
+    & python "$dashboardDir\score.py" --input $filteredFile --tracker $tracker --batch-size 10 2>&1 | ForEach-Object {
         "[$(AmsTime)] [score] $_" | Out-File $logFile -Append -Encoding UTF8
     }
 } catch {
