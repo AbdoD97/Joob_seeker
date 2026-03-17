@@ -346,12 +346,19 @@ function updateAgentUI(s) {
     iterFill.style.width = pct + '%';
     iterLabel.textContent = s.iteration + '/' + (s.maxIterations || 8) + ' (' + pct + '%)';
     // Show phase-aware status text
-    if (s.phase === 'searching') {
-      label.textContent = 'Iteration ' + s.iteration + ' searching...';
-    } else if (s.phase === 'done') {
-      label.textContent = 'Iteration ' + s.iteration + ' done';
+    var stageNames = {1: 'Harvesting', 2: 'Filtering', 3: 'Scoring'};
+    if (s.phase === 'harvesting') {
+      label.textContent = 'Stage 1: Harvesting jobs...';
+    } else if (s.phase === 'filtering') {
+      label.textContent = 'Stage 2: Filtering...';
+    } else if (s.phase === 'scoring') {
+      label.textContent = 'Stage 3: Scoring with AI...';
+    } else if (s.phase === 'searching') {
+      label.textContent = 'Searching...';
+    } else if (s.phase === 'done' && s.iteration) {
+      label.textContent = (stageNames[s.iteration] || 'Stage ' + s.iteration) + ' done';
     } else if (s.phase === 'finishing') {
-      label.textContent = 'Finishing up...';
+      label.textContent = 'Complete';
       iterFill.style.width = '100%';
       iterLabel.textContent = 'done';
     } else if (s.log) {

@@ -68,20 +68,19 @@ function parseSearchLog() {
   try {
     const lines = fs.readFileSync(SEARCH_LOG, 'utf8').trim().split('\n');
     log = lines[lines.length - 1] || '';
-    // Scan all lines for worker/iteration info
-    let workersStarted = 0;
+    // Scan lines for pipeline stage info
+    maxIterations = 3; // 3 stages: harvest, filter, score
     for (const line of lines) {
-      const m = line.match(/Iteration (\d+)/);
-      if (m) iteration = parseInt(m[1]);
-      if (/Started worker/i.test(line)) workersStarted++;
-      if (/starting/i.test(line) && m) phase = 'searching';
-      if (/done/i.test(line) && m) phase = 'done';
-      if (/Launching.*parallel/i.test(line)) { phase = 'searching'; iteration = workersStarted; }
-      if (/All workers done|Merging/i.test(line)) phase = 'merging';
-      if (/cap reached|Stopping|No new jobs|complete/i.test(line)) phase = 'finishing';
+      if (/Stage 1.*Harvest/i.test(line)) { iteration = 1; phase = 'harvesting'; }
+      if (/Stage 1 complete/i.test(line)) { iteration = 1; phase = 'done'; }
+      if (/Stage 2.*Filter/i.test(line)) { iteration = 2; phase = 'filtering'; }
+      if (/Stage 2 complete/i.test(line)) { iteration = 2; phase = 'done'; }
+      if (/Stage 3.*Scor/i.test(line)) { iteration = 3; phase = 'scoring'; }
+      if (/Pipeline complete/i.test(line)) { iteration = 3; phase = 'finishing'; }
+      // Fallback for old parallel format
+      if (/Launching.*parallel/i.test(line)) { phase = 'searching'; iteration = 1; maxIterations = 1; }
+      if (/Iteration (\d+)/i.test(line)) { iteration = parseInt(RegExp.$1); phase = 'searching'; }
     }
-    if (workersStarted > 0 && !iteration) iteration = workersStarted;
-    if (workersStarted > 0) maxIterations = 6; // 6 parallel workers
   } catch {}
   const pct = iteration ? Math.round((iteration / maxIterations) * 100) : 0;
   return { log, iteration, maxIterations, phase, progress: pct };
