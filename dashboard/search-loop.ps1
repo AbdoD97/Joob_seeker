@@ -6,16 +6,18 @@ $agentDir = "C:\agents\omda"
 $logFile = "C:\agents\omda\data\jobs\search-log.txt"
 $dataDir = "C:\agents\omda\data\jobs"
 
+function AmsTime { [System.TimeZoneInfo]::ConvertTimeBySystemTimeZoneId((Get-Date), 'W. Europe Standard Time').ToString('yyyy-MM-dd HH:mm:ss') }
+
 $loopStart = Get-Date
 $startData = Get-Content $tracker -Raw | ConvertFrom-Json
 $startCount = $startData.jobs.Count
 $nextId = ($startData.jobs | ForEach-Object { $_.id } | Measure-Object -Maximum).Maximum
 if (-not $nextId) { $nextId = 0 }
 
-"[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Search loop starting (tracker has $startCount jobs, PARALLEL mode, max ${maxLoopMinutes}min)" | Out-File $logFile -Encoding UTF8
+"[$(AmsTime)] Search loop starting (tracker has $startCount jobs, PARALLEL mode, max ${maxLoopMinutes}min)" | Out-File $logFile -Encoding UTF8
 
 if ($startCount -ge $maxTotal) {
-    "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Total cap reached: $startCount/$maxTotal jobs. Stopping." | Out-File $logFile -Append -Encoding UTF8
+    "[$(AmsTime)] Total cap reached: $startCount/$maxTotal jobs. Stopping." | Out-File $logFile -Append -Encoding UTF8
     exit
 }
 
@@ -45,7 +47,7 @@ foreach ($p in $prompts) {
     [System.IO.File]::WriteAllText($p.file, '{"jobs": []}', (New-Object System.Text.UTF8Encoding $false))
 }
 
-"[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Launching 3 parallel searches: general, recruiters, expat" | Out-File $logFile -Append -Encoding UTF8
+"[$(AmsTime)] Launching 3 parallel searches: general, recruiters, expat" | Out-File $logFile -Append -Encoding UTF8
 
 # Launch all 3 in parallel
 $jobs = @()
@@ -55,7 +57,7 @@ foreach ($p in $prompts) {
         Set-Location $dir
         & claude -p $prompt --model sonnet --effort max --dangerously-skip-permissions 2>&1
     } -ArgumentList $agentDir, $p.prompt
-    "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Started worker: $($p.name)" | Out-File $logFile -Append -Encoding UTF8
+    "[$(AmsTime)] Started worker: $($p.name)" | Out-File $logFile -Append -Encoding UTF8
 }
 
 # Wait for all with timeout (leave 2min for merge)
@@ -66,12 +68,12 @@ $allDone = Wait-Job $jobs -Timeout $timeoutSeconds
 foreach ($j in $jobs) {
     if ($j.State -eq 'Running') {
         Stop-Job $j
-        "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Worker timed out, killed" | Out-File $logFile -Append -Encoding UTF8
+        "[$(AmsTime)] Worker timed out, killed" | Out-File $logFile -Append -Encoding UTF8
     }
     Remove-Job $j -Force -ErrorAction SilentlyContinue
 }
 
-"[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] All workers done. Merging results..." | Out-File $logFile -Append -Encoding UTF8
+"[$(AmsTime)] All workers done. Merging results..." | Out-File $logFile -Append -Encoding UTF8
 
 # Merge all temp tracker files into main tracker
 $mainData = Get-Content $tracker -Raw | ConvertFrom-Json
@@ -95,9 +97,9 @@ foreach ($p in $prompts) {
             $addedFromGroup++
             $totalAdded++
         }
-        "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Merged $($p.name): +$addedFromGroup jobs (from $($tempJobs.Count) found)" | Out-File $logFile -Append -Encoding UTF8
+        "[$(AmsTime)] Merged $($p.name): +$addedFromGroup jobs (from $($tempJobs.Count) found)" | Out-File $logFile -Append -Encoding UTF8
     } catch {
-        "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Error merging $($p.name): $_" | Out-File $logFile -Append -Encoding UTF8
+        "[$(AmsTime)] Error merging $($p.name): $_" | Out-File $logFile -Append -Encoding UTF8
     }
 }
 
@@ -109,7 +111,7 @@ $json = $mainData | ConvertTo-Json -Depth 10
 
 $finalCount = $mainData.jobs.Count
 $totalElapsed = ((Get-Date) - $loopStart).TotalMinutes.ToString('F1')
-"[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Search loop complete: $finalCount total jobs (+$totalAdded new) in ${totalElapsed}min" | Out-File $logFile -Append -Encoding UTF8
+"[$(AmsTime)] Search loop complete: $finalCount total jobs (+$totalAdded new) in ${totalElapsed}min" | Out-File $logFile -Append -Encoding UTF8
 
 # Cleanup temp files
 foreach ($p in $prompts) {
