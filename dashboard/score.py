@@ -71,7 +71,7 @@ def score_batch(jobs):
 
     try:
         result = subprocess.run(
-            ["claude", "--print", "-m", "sonnet", prompt],
+            [r"C:\Users\Administrator\AppData\Roaming\npm\claude.cmd", "--print", "-m", "sonnet", prompt],
             capture_output=True,
             text=True,
             timeout=120,

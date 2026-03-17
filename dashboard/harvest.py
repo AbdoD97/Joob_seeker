@@ -32,7 +32,7 @@ def scrape_jobspy(queries, country, hours):
         return []
 
     jobs = []
-    sites = ["indeed", "glassdoor", "google"]
+    sites = ["indeed", "google"]  # glassdoor blocked (403 Cloudflare)
     hours_old = int(hours)
 
     for query in queries:
