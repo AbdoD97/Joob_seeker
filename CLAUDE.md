@@ -136,7 +136,7 @@ Overall average: **60-90% token reduction** on common development operations.
 - Always show direct job posting links in results — never search/portal redirect links. Verify each URL points to the specific job posting.
 - Before discarding a job for a broken/expired link, search the internet for an alternative URL for that same position before removing it from the tracker.
 - Job searches default to 10-day freshness filter unless explicitly told otherwise.
-- LinkedIn is temporarily disabled for job searches (soft ban risk). Search these platforms instead: Indeed NL, IamExpat, Undutchables, Glassdoor NL, StepStone NL, Nationale Vacaturebank, Google Jobs.
+- LinkedIn is OFF by default for job searches (soft ban risk). Do not use LinkedIn unless explicitly told to. Search all other configured platforms instead.
 - Always include salary range in job results and Telegram notifications. If not stated in the posting, write "not listed".
 - Hard exclude: managerial titles (Manager, Head of, Director, Lead, Senior Manager), jobs requiring 4+ years experience, hands-on physical supply chain roles.
 - Rank by years of experience required ascending — jobs requiring fewer years get higher priority (1yr > 2yr > 3yr). Mohammad is intentionally targeting roles he is overqualified for to maximize interview callback rate.
