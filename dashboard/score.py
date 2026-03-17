@@ -70,12 +70,24 @@ def score_batch(jobs):
     prompt = SCORING_PROMPT_TEMPLATE.format(jobs_block=jobs_block)
 
     try:
-        result = subprocess.run(
-            [r"C:\Users\Administrator\AppData\Roaming\npm\claude.cmd", "--print", "-m", "sonnet", prompt],
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
+        # Write prompt to temp file to avoid Windows command-line length limit
+        import tempfile
+        prompt_file = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8')
+        prompt_file.write(prompt)
+        prompt_file.close()
+
+        try:
+            # Use PowerShell to read file and pipe to claude
+            ps_cmd = f'$p = Get-Content \'{prompt_file.name}\' -Raw; & "C:\\Users\\Administrator\\AppData\\Roaming\\npm\\claude.cmd" --print -m sonnet $p'
+            result = subprocess.run(
+                ["powershell", "-Command", ps_cmd],
+                capture_output=True,
+                text=True,
+                timeout=180,
+            )
+        finally:
+            import os
+            os.unlink(prompt_file.name)
     except subprocess.TimeoutExpired:
         print("  ERROR: Claude CLI timed out after 120s")
         return None
@@ -183,7 +195,7 @@ def main():
     parser = argparse.ArgumentParser(description="Score filtered jobs via Claude CLI")
     parser.add_argument("--input", required=True, help="Path to filtered_jobs.json")
     parser.add_argument("--tracker", required=True, help="Path to tracker.json")
-    parser.add_argument("--batch-size", type=int, default=20, help="Jobs per Claude call (default: 20)")
+    parser.add_argument("--batch-size", type=int, default=10, help="Jobs per Claude call (default: 10)")
     args = parser.parse_args()
 
     # Load filtered jobs
